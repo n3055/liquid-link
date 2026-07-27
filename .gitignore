@@ -1,0 +1,29 @@
+# Binaries
+bin/
+cmd/node/node
+cmd/cli/cli
+
+# OS files
+.DS_Store
+
+# Go-specific
+*.test
+*.out
+cover.out
+
+# Database & Local Data
+data/
+*.db
+
+# IDEs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Configurations / Credentials
+.env
+*.local.yaml
