@@ -3,6 +3,7 @@ package wallet
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -122,6 +123,12 @@ func TestFileRepository(t *testing.T) {
 	err = repo.Save(ctx, alias, w)
 	if err != nil {
 		t.Fatalf("failed to save wallet: %v", err)
+	}
+
+	// Test Save duplicate alias fails with ErrAlreadyExists
+	err = repo.Save(ctx, alias, w)
+	if !errors.Is(err, ErrAlreadyExists) {
+		t.Errorf("expected ErrAlreadyExists when saving duplicate alias, got %v", err)
 	}
 
 	// Verify file was created and permissions are 0600

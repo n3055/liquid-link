@@ -129,6 +129,13 @@ func (r *fileRepository) Save(ctx context.Context, alias string, w Wallet) error
 		return errors.New("wallet alias cannot be empty")
 	}
 
+	filePath := filepath.Join(r.baseDir, alias+".json")
+	if _, err := os.Stat(filePath); err == nil {
+		return fmt.Errorf("%w: wallet with alias '%s' already exists", ErrAlreadyExists, alias)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check if wallet file exists: %w", err)
+	}
+
 	lw, ok := w.(*localWallet)
 	if !ok {
 		return errors.New("unsupported wallet implementation")
@@ -145,7 +152,6 @@ func (r *fileRepository) Save(ctx context.Context, alias string, w Wallet) error
 		return fmt.Errorf("failed to marshal wallet: %w", err)
 	}
 
-	filePath := filepath.Join(r.baseDir, alias+".json")
 	if err := os.WriteFile(filePath, encoded, 0600); err != nil {
 		return fmt.Errorf("failed to write wallet file: %w", err)
 	}

@@ -2,10 +2,14 @@ package wallet
 
 import (
 	"context"
+	"errors"
 
 	"github.com/n3055/liquid-link/internal/crypto"
 	"github.com/n3055/liquid-link/internal/transaction"
 )
+
+// ErrAlreadyExists is returned when attempting to save a wallet under an alias that is already in use.
+var ErrAlreadyExists = errors.New("wallet already exists")
 
 // Wallet manages key storage, address creation, and transaction signing.
 type Wallet interface {
