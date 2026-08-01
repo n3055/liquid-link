@@ -173,6 +173,27 @@ func TestFileRepository(t *testing.T) {
 	if err == nil {
 		t.Error("expected error loading non-existent wallet, got nil")
 	}
+
+	// Test Path Traversal Protection
+	invalidAliases := []string{
+		"../traversal",
+		"sub/folder",
+		".",
+		"..",
+		"sub/../folder",
+	}
+
+	for _, invalid := range invalidAliases {
+		err = repo.Save(ctx, invalid, w)
+		if err == nil {
+			t.Errorf("expected path traversal error when saving invalid alias '%s', got nil", invalid)
+		}
+
+		_, err = repo.Load(ctx, invalid)
+		if err == nil {
+			t.Errorf("expected path traversal error when loading invalid alias '%s', got nil", invalid)
+		}
+	}
 }
 
 // Helper function to hash payload for verifying signature in test.

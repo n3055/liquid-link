@@ -125,8 +125,8 @@ func NewFileRepository(baseDir string) (Repository, error) {
 
 // Save stores a wallet securely in local storage.
 func (r *fileRepository) Save(ctx context.Context, alias string, w Wallet) error {
-	if alias == "" {
-		return errors.New("wallet alias cannot be empty")
+	if err := sanitizeAlias(alias); err != nil {
+		return err
 	}
 
 	filePath := filepath.Join(r.baseDir, alias+".json")
@@ -161,8 +161,8 @@ func (r *fileRepository) Save(ctx context.Context, alias string, w Wallet) error
 
 // Load retrieves a wallet by its alias from local storage.
 func (r *fileRepository) Load(ctx context.Context, alias string) (Wallet, error) {
-	if alias == "" {
-		return nil, errors.New("wallet alias cannot be empty")
+	if err := sanitizeAlias(alias); err != nil {
+		return nil, err
 	}
 
 	filePath := filepath.Join(r.baseDir, alias+".json")
@@ -222,4 +222,16 @@ func (r *fileRepository) List(ctx context.Context) (map[string]crypto.Address, e
 	}
 
 	return wallets, nil
+}
+
+// sanitizeAlias validates that the alias is non-empty and does not contain path traversal characters.
+func sanitizeAlias(alias string) error {
+	if alias == "" {
+		return errors.New("wallet alias cannot be empty")
+	}
+	// filepath.Base returns the last element of the path. If it differs, or contains traversal components, reject it.
+	if filepath.Base(alias) != alias || alias == "." || alias == ".." {
+		return fmt.Errorf("invalid wallet alias '%s': directory traversal is not allowed", alias)
+	}
+	return nil
 }
