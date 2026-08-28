@@ -67,6 +67,18 @@ func NewLedger(repo StateRepository) Ledger {
 	}
 }
 
+// [Ledger] SetAccountState updates the account state in both persistent store and in-memory cache.
+func (l *ledgerImpl) SetAccountState(ctx context.Context, state *AccountState) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if err := l.repo.SetAccountState(ctx, state); err != nil {
+		return err
+	}
+	l.cache[state.Address] = copyState(state)
+	return nil
+}
+
 func (l *ledgerImpl) GetAccountState(ctx context.Context, addr crypto.Address) (*AccountState, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

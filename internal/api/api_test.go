@@ -32,7 +32,7 @@ func setupTestServer(t *testing.T) (*Server, crypto.Address, func()) {
 
 	stateRepo := ledger.NewStateRepository(store)
 	led := ledger.NewLedger(stateRepo)
-	balanceAdapter := ledger.NewLedgerBalanceAdapter(stateRepo)
+	balanceAdapter := ledger.NewLedgerBalanceAdapter(led.(ledger.StateRepository))
 
 	assetMgr := token.NewAssetManager(balanceAdapter, store)
 

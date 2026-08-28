@@ -20,6 +20,7 @@ func NewLedgerBalanceAdapter(repo StateRepository) token.BalanceRepository {
 	return &LedgerBalanceAdapter{repo: repo}
 }
 
+// [Ledger] GetBalance retrieves the account balance for a given address from the state repository.
 func (a *LedgerBalanceAdapter) GetBalance(ctx context.Context, addr crypto.Address) (token.Amount, error) {
 	state, err := a.repo.GetAccountState(ctx, addr)
 	if err != nil {
@@ -31,6 +32,7 @@ func (a *LedgerBalanceAdapter) GetBalance(ctx context.Context, addr crypto.Addre
 	return state.Balance, nil
 }
 
+// [Ledger] SetBalance sets the account balance for a given address in the state repository, preserving existing nonces.
 func (a *LedgerBalanceAdapter) SetBalance(ctx context.Context, addr crypto.Address, balance token.Amount) error {
 	state, err := a.repo.GetAccountState(ctx, addr)
 	if err != nil {

@@ -50,7 +50,7 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 	// 2. Initialize Ledger State & Adapter
 	stateRepo := ledger.NewStateRepository(store)
 	led := ledger.NewLedger(stateRepo)
-	balanceAdapter := ledger.NewLedgerBalanceAdapter(stateRepo)
+	balanceAdapter := ledger.NewLedgerBalanceAdapter(led.(ledger.StateRepository))
 
 	// 3. Initialize Asset Manager
 	assetMgr := token.NewAssetManager(balanceAdapter, store)

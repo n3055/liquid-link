@@ -174,11 +174,17 @@ func (b *bridgeImpl) InitiateBridgeRequest(ctx context.Context, to crypto.Addres
 
 	// 3. Store UTR Mapping
 	if err := b.registry.MapUTR(ctx, utr, txID); err != nil {
+		if b.assetManager != nil {
+			_ = b.assetManager.Credit(ctx, to, amount)
+		}
 		return nil, fmt.Errorf("failed to record UTR mapping: %w", err)
 	}
 
 	mapping, err := b.registry.GetUTRMapping(ctx, utr)
 	if err != nil {
+		if b.assetManager != nil {
+			_ = b.assetManager.Credit(ctx, to, amount)
+		}
 		return nil, err
 	}
 

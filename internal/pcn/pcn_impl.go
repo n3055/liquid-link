@@ -163,6 +163,9 @@ func (m *managerImpl) OpenChannel(ctx context.Context, counterpart crypto.Addres
 	}
 
 	if err := m.registry.RegisterChannel(ctx, ch); err != nil {
+		if m.assetManager != nil {
+			_ = m.assetManager.Credit(ctx, m.nodeAddr, initialDeposit)
+		}
 		return nil, fmt.Errorf("failed to register channel: %w", err)
 	}
 
@@ -246,10 +249,17 @@ func (m *managerImpl) FinalizeSettlement(ctx context.Context, channelID string) 
 	// Refund/Distribute balances to accounts
 	if m.assetManager != nil {
 		if ch.Share.BalancePartyA > 0 {
-			_ = m.assetManager.Credit(ctx, ch.Share.PartyA, ch.Share.BalancePartyA)
+			if err := m.assetManager.Credit(ctx, ch.Share.PartyA, ch.Share.BalancePartyA); err != nil {
+				return fmt.Errorf("failed to credit party A (%s): %w", ch.Share.PartyA, err)
+			}
 		}
 		if ch.Share.BalancePartyB > 0 {
-			_ = m.assetManager.Credit(ctx, ch.Share.PartyB, ch.Share.BalancePartyB)
+			if err := m.assetManager.Credit(ctx, ch.Share.PartyB, ch.Share.BalancePartyB); err != nil {
+				if ch.Share.BalancePartyA > 0 {
+					_ = m.assetManager.Debit(ctx, ch.Share.PartyA, ch.Share.BalancePartyA)
+				}
+				return fmt.Errorf("failed to credit party B (%s): %w", ch.Share.PartyB, err)
+			}
 		}
 	}
 
