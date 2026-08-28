@@ -27,9 +27,9 @@ type Share struct {
 
 // Bond represents lockup parameters securing a payment channel.
 type Bond struct {
-	TxID          string       `json:"tx_id"`          // Transaction locking the collateral
+	TxID             string       `json:"tx_id"` // Transaction locking the collateral
 	LockedCollateral token.Amount `json:"locked_collateral"`
-	Expiry        time.Time    `json:"expiry"`
+	Expiry           time.Time    `json:"expiry"`
 }
 
 // Channel represents an active payment channel between two nodes.

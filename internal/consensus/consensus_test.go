@@ -54,7 +54,7 @@ func TestConsensusFlow(t *testing.T) {
 
 	// 1. Create a valid Genesis block proposed by bankA
 	genesis := block.NewBlock(0, blockchain.GenesisPrevHash, nil, "bankA")
-	
+
 	signerA, _ := crypto.NewSigner(bankAkp.PrivateKey)
 	sigHash := genesis.SigningHash()
 	sig, _ := signerA.Sign(sigHash[:])
@@ -166,7 +166,7 @@ func TestConsensusFlow(t *testing.T) {
 	sigC, _ := signerC.Sign([]byte(voteCData))
 	voteC.Signature = sigC
 
-	// Tally votes: threshold = 0.66, total = 3 validators. 
+	// Tally votes: threshold = 0.66, total = 3 validators.
 	// 2/3 = 66.6% -> should pass
 	passed, err := engine.CollectVotes(ctx, block1.Hash, []*Vote{voteB, voteC})
 	if err != nil {

@@ -10,11 +10,13 @@ import (
 	"github.com/n3055/liquid-link/internal/blockchain"
 	"github.com/n3055/liquid-link/internal/config"
 	"github.com/n3055/liquid-link/internal/consensus"
+	"github.com/n3055/liquid-link/internal/crypto"
 	"github.com/n3055/liquid-link/internal/ledger"
 	"github.com/n3055/liquid-link/internal/pcn"
 	"github.com/n3055/liquid-link/internal/peer"
 	"github.com/n3055/liquid-link/internal/receipt"
 	"github.com/n3055/liquid-link/internal/storage"
+	"github.com/n3055/liquid-link/internal/token"
 	"github.com/n3055/liquid-link/internal/transport"
 	"github.com/n3055/liquid-link/internal/wallet"
 )
@@ -32,11 +34,12 @@ type Node struct {
 	transports   []transport.Transport
 	peerRegistry peer.Registry
 	wallet       wallet.Wallet
+	assetManager token.AssetManager
 	apiServer    *api.Server
 	httpServer   *http.Server
 }
 
-// NewNode instantiates the node, injecting all concrete placeholders.
+// NewNode instantiates the node, injecting all concrete implementations.
 func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 	// 1. Initialize Storage
 	store, err := storage.NewBadgerStore(&cfg.Storage)
@@ -44,18 +47,81 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 		return nil, fmt.Errorf("failed to load storage: %w", err)
 	}
 
-	// TODO: Initialize concrete implementations of components
-	var led ledger.Ledger
-	var bc blockchain.Blockchain
-	var cons consensus.Engine
-	var pcnMgr pcn.Manager
-	var br receipt.Bridge
-	var w wallet.Wallet
-	var reg peer.Registry
+	// 2. Initialize Ledger State & Adapter
+	stateRepo := ledger.NewStateRepository(store)
+	led := ledger.NewLedger(stateRepo)
+	balanceAdapter := ledger.NewLedgerBalanceAdapter(stateRepo)
+
+	// 3. Initialize Asset Manager
+	assetMgr := token.NewAssetManager(balanceAdapter, store)
+
+	// 4. Crypto Keys & Signer
+	cryptoGen := crypto.NewGenerator()
+	keyPair, err := cryptoGen.GenerateKeyPair()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate node key pair: %w", err)
+	}
+
+	signer, err := crypto.NewSigner(keyPair.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize signer: %w", err)
+	}
+
+	verifier := crypto.NewVerifier()
+	w := wallet.NewWallet(keyPair)
+
+	// Mint initial genesis allocation to default node wallet
+	ctx := context.Background()
+	_ = assetMgr.Mint(ctx, w.Address(), 100000)
+
+	// 5. Blockchain & Consensus
+	blockRepo := blockchain.NewRepository(store)
+	validators := map[string]crypto.PublicKey{
+		cfg.Node.ID: keyPair.PublicKey,
+	}
+
+	bc := blockchain.NewBlockchain(blockRepo, verifier, validators)
+
+	cons, err := consensus.NewEngine(cfg.Node.ID, keyPair.PrivateKey, bc, led, validators, 0.5)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize consensus engine: %w", err)
+	}
+
+	// 6. PCN Manager & Registry
+	pcnRegistry := pcn.NewHolderRegistry(store)
+	pcnMgr := pcn.NewManager(w.Address(), signer, led, pcnRegistry, assetMgr)
+
+	// 7. Receipt Bridge & Registry
+	receiptReg := receipt.NewRegistry(store, verifier, keyPair.PublicKey)
+	br := receipt.NewBridge(receiptReg, assetMgr, signer, store)
+
+	// 8. Peer Registry
+	peerReg := peer.NewRegistry(store)
+
+	// Register self in peer registry
+	_ = peerReg.RegisterPeer(ctx, &peer.Info{
+		ID:        cfg.Node.ID,
+		Address:   w.Address(),
+		Endpoint:  fmt.Sprintf("http://localhost:%d", cfg.Node.Port),
+		Connected: true,
+	})
 
 	transports := make([]transport.Transport, 0)
 
-	apiSrv := api.NewServer(&cfg.Node, led, pcnMgr, br, w)
+	// 9. API Server with full dependencies injected
+	apiSrv := api.NewServer(
+		&cfg.Node,
+		led,
+		bc,
+		cons,
+		pcnMgr,
+		br,
+		w,
+		peerReg,
+		assetMgr,
+		pcnRegistry,
+		receiptReg,
+	)
 
 	httpSrv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Node.Port),
@@ -72,8 +138,9 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 		pcnManager:   pcnMgr,
 		bridge:       br,
 		transports:   transports,
-		peerRegistry: reg,
+		peerRegistry: peerReg,
 		wallet:       w,
+		assetManager: assetMgr,
 		apiServer:    apiSrv,
 		httpServer:   httpSrv,
 	}, nil
