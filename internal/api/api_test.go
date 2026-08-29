@@ -316,3 +316,29 @@ func TestBlockchainEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 OK for list blocks, got %d", rr.Code)
 	}
 }
+
+// [API] TestTransfer_ExplicitSender tests sending a transfer with an explicit sender specified in the request payload.
+func TestTransfer_ExplicitSender(t *testing.T) {
+	s, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Mint tokens to explicit sender first
+	mintPayload := []byte(`{"address":"explicit-sender-addr","amount":500}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/wallet/mint", bytes.NewBuffer(mintPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for minting, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// Perform transfer specifying explicit sender
+	transferPayload := []byte(`{"sender":"explicit-sender-addr","receiver":"receiver-3","amount":150}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/wallet/transfer", bytes.NewBuffer(transferPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted for explicit sender transfer, got %d: %s", rr.Code, rr.Body.String())
+	}
+}

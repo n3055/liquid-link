@@ -244,6 +244,7 @@ func (s *Server) handleBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 type transferReq struct {
+	Sender   string       `json:"sender"`
 	Receiver string       `json:"receiver"`
 	Amount   token.Amount `json:"amount"`
 }
@@ -267,6 +268,9 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sender := s.wallet.Address()
+	if req.Sender != "" {
+		sender = crypto.Address(req.Sender)
+	}
 	if err := s.assetMgr.Debit(ctx, sender, req.Amount); err != nil {
 		respondError(w, http.StatusBadRequest, "transfer failed: "+err.Error())
 		return
