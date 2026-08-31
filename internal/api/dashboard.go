@@ -4,24 +4,32 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/n3055/liquid-link/internal/orderbook"
 	"github.com/n3055/liquid-link/internal/pcn"
 	"github.com/n3055/liquid-link/internal/receipt"
+	"github.com/n3055/liquid-link/internal/stability"
 	"github.com/n3055/liquid-link/internal/token"
 )
 
 // [Dashboard] dashboardData encapsulates all view-model metrics presented on the node web dashboard.
 type dashboardData struct {
-	NodeID       string
-	Port         int
-	Address      string
-	Balance      token.Amount
-	TotalSupply  token.Amount
-	BlockHeight  uint64
-	PeerCount    int
-	Channels     []*pcn.Channel
-	UTRMappings  []*receipt.UTRMapping
-	RecentBlocks []interface{}
-	Tip          interface{}
+	NodeID           string
+	Port             int
+	Address          string
+	Balance          token.Amount
+	TotalSupply      token.Amount
+	BlockHeight      uint64
+	PeerCount        int
+	Channels         []*pcn.Channel
+	UTRMappings      []*receipt.UTRMapping
+	RecentBlocks     []interface{}
+	Tip              interface{}
+	OrderbookDepth   *orderbook.Depth
+	OrderbookTrades  []*orderbook.Trade
+	StabilityStatus  *stability.Status
+	StabilityHistory []stability.PricePoint
+	StakedShares     token.Amount
+	BondsHeld        token.Amount
 }
 
 // [Dashboard] collectDashboardData gathers live system statistics across all node sub-services.
@@ -80,6 +88,32 @@ func (s *Server) collectDashboardData(ctx context.Context) *dashboardData {
 	if s.receiptRegistry != nil {
 		if mappings, err := s.receiptRegistry.ListUTRMapping(ctx); err == nil {
 			d.UTRMappings = mappings
+		}
+	}
+
+	ob := s.getOrderbookEngine()
+	if depth, err := ob.GetDepth(ctx); err == nil {
+		d.OrderbookDepth = depth
+	}
+	if trades, err := ob.GetTrades(ctx, 15); err == nil {
+		d.OrderbookTrades = trades
+	}
+
+	stab := s.getStabilityEngine()
+	if status, err := stab.GetStatus(ctx); err == nil {
+		d.StabilityStatus = status
+	}
+	if history, err := stab.GetPriceHistory(ctx); err == nil {
+		d.StabilityHistory = history
+	}
+
+	if s.wallet != nil {
+		userAddr := s.wallet.Address()
+		if stPos, err := stab.GetStakingPosition(ctx, userAddr); err == nil && stPos != nil {
+			d.StakedShares = stPos.StakedShares
+		}
+		if bdPos, err := stab.GetBondPosition(ctx, userAddr); err == nil && bdPos != nil {
+			d.BondsHeld = bdPos.BondsHeld
 		}
 	}
 

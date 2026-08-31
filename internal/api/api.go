@@ -1,11 +1,16 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -14,15 +19,18 @@ import (
 	"github.com/n3055/liquid-link/internal/consensus"
 	"github.com/n3055/liquid-link/internal/crypto"
 	"github.com/n3055/liquid-link/internal/ledger"
+	"github.com/n3055/liquid-link/internal/orderbook"
 	"github.com/n3055/liquid-link/internal/pcn"
 	"github.com/n3055/liquid-link/internal/peer"
 	"github.com/n3055/liquid-link/internal/receipt"
+	"github.com/n3055/liquid-link/internal/stability"
 	"github.com/n3055/liquid-link/internal/token"
 	"github.com/n3055/liquid-link/internal/wallet"
 )
 
 // Server implements HTTP routing and API handlers.
 type Server struct {
+	mu              sync.Mutex
 	cfg             *config.NodeConfig
 	router          chi.Router
 	ledger          ledger.Ledger
@@ -35,6 +43,8 @@ type Server struct {
 	assetMgr        token.AssetManager
 	pcnRegistry     pcn.HolderRegistry
 	receiptRegistry receipt.Registry
+	stabilityEng    stability.Engine
+	orderbookEng    orderbook.Engine
 }
 
 // NewServer creates a new API Server instance with registered routes and injected dependencies.
@@ -96,8 +106,29 @@ func (s *Server) setupRoutes() {
 		r.Route("/wallet", func(wr chi.Router) {
 			wr.Get("/info", s.handleWalletInfo)
 			wr.Get("/balance", s.handleBalance)
+			wr.Get("/holdings", s.handleWalletHoldings)
+			wr.Post("/create", s.handleWalletCreate)
 			wr.Post("/transfer", s.handleTransfer)
 			wr.Post("/mint", s.handleMint)
+		})
+
+		// Orderbook actions
+		r.Route("/orderbook", func(obr chi.Router) {
+			obr.Get("/depth", s.handleOrderbookDepth)
+			obr.Get("/trades", s.handleOrderbookTrades)
+			obr.Get("/user-orders", s.handleUserOrders)
+			obr.Post("/order", s.handlePlaceOrder)
+			obr.Post("/cancel", s.handleCancelOrder)
+		})
+
+		// Seigniorage Stability actions
+		r.Route("/stability", func(sr chi.Router) {
+			sr.Get("/status", s.handleStabilityStatus)
+			sr.Get("/history", s.handleStabilityHistory)
+			sr.Post("/stake", s.handleStakeShares)
+			sr.Post("/unstake", s.handleUnstakeShares)
+			sr.Post("/buy-bonds", s.handleBuyBonds)
+			sr.Post("/redeem-bonds", s.handleRedeemBonds)
 		})
 
 		// PCN / Channels actions
@@ -283,12 +314,62 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Trigger asynchronous inter-node balance synchronization across peer network
+	go s.syncPeerCredit(crypto.Address(req.Receiver), req.Amount)
+
 	respondJSON(w, http.StatusAccepted, map[string]interface{}{
 		"status":   "success",
 		"sender":   string(sender),
 		"receiver": req.Receiver,
 		"amount":   req.Amount,
 	})
+}
+
+// [Ledger] syncPeerCredit broadcasts a credit update for an address to all peer endpoints over HTTP REST.
+func (s *Server) syncPeerCredit(addr crypto.Address, amount token.Amount) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+
+	endpoints := make(map[string]bool)
+
+	if s.peers != nil {
+		if peers, err := s.peers.ListPeers(ctx); err == nil {
+			for _, p := range peers {
+				if p.ID != s.cfg.ID && p.Endpoint != "" {
+					endpoints[p.Endpoint] = true
+				}
+			}
+		}
+	}
+
+	// Always fallback to standard local node ports if peer list is unpopulated
+	defaultPorts := []int{8080, 8081}
+	for _, port := range defaultPorts {
+		if port != s.cfg.Port {
+			endpoints[fmt.Sprintf("http://localhost:%d", port)] = true
+		}
+	}
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"address": string(addr),
+		"amount":  amount,
+	})
+	if err != nil {
+		return
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	for ep := range endpoints {
+		url := fmt.Sprintf("%s/api/v1/wallet/mint", strings.TrimSuffix(ep, "/"))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := client.Do(req)
+			if err == nil {
+				_ = resp.Body.Close()
+			}
+		}
+	}
 }
 
 type mintReq struct {
@@ -717,4 +798,337 @@ func (s *Server) handleRegisterPeer(w http.ResponseWriter, r *http.Request) {
 		"status": "peer_registered",
 		"peer":   p,
 	})
+}
+
+func (s *Server) getStabilityEngine() stability.Engine {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stabilityEng == nil {
+		s.stabilityEng = stability.NewEngine(nil, s.assetMgr)
+	}
+	return s.stabilityEng
+}
+
+func (s *Server) getOrderbookEngine() orderbook.Engine {
+	stab := s.getStabilityEngine()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.orderbookEng == nil {
+		s.orderbookEng = orderbook.NewEngine(s.assetMgr, stab)
+	}
+	return s.orderbookEng
+}
+
+// [API] handleWalletCreate generates a new wallet keypair, initializes balance, and returns credentials.
+func (s *Server) handleWalletCreate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	newW, err := wallet.GenerateWallet()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to generate wallet: "+err.Error())
+		return
+	}
+
+	addr := newW.Address()
+
+	// Credit initial test balance to new wallet (1000 LQD)
+	if s.assetMgr != nil {
+		_ = s.assetMgr.Mint(ctx, addr, 1000)
+	}
+
+	respondJSON(w, http.StatusCreated, map[string]interface{}{
+		"status":  "created",
+		"address": string(addr),
+		"balance": 1000,
+	})
+}
+
+// [API] handleWalletHoldings returns complete token balance, staked share holdings, and bond holdings for an address.
+func (s *Server) handleWalletHoldings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	targetAddr := r.URL.Query().Get("address")
+	if targetAddr == "" && s.wallet != nil {
+		targetAddr = string(s.wallet.Address())
+	}
+	if targetAddr == "" {
+		respondError(w, http.StatusBadRequest, "address parameter required")
+		return
+	}
+
+	userAddr := crypto.Address(targetAddr)
+	var balance token.Amount
+	if s.assetMgr != nil {
+		if b, err := s.assetMgr.BalanceOf(ctx, userAddr); err == nil {
+			balance = b
+		}
+	}
+
+	stabEng := s.getStabilityEngine()
+	stakePos, _ := stabEng.GetStakingPosition(ctx, userAddr)
+	bondPos, _ := stabEng.GetBondPosition(ctx, userAddr)
+
+	var stakedShares token.Amount
+	var accruedYield token.Amount
+	if stakePos != nil {
+		stakedShares = stakePos.StakedShares
+		accruedYield = stakePos.AccruedYield
+	}
+
+	var bondsHeld token.Amount
+	if bondPos != nil {
+		bondsHeld = bondPos.BondsHeld
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"address":       targetAddr,
+		"balance":       balance,
+		"staked_shares": stakedShares,
+		"accrued_yield": accruedYield,
+		"bonds_held":    bondsHeld,
+	})
+}
+
+// [Orderbook] handleOrderbookDepth returns the current orderbook depth (bids and asks).
+func (s *Server) handleOrderbookDepth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	depth, err := s.getOrderbookEngine().GetDepth(ctx)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to fetch orderbook depth: "+err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, depth)
+}
+
+// [Orderbook] handleOrderbookTrades returns recent executed trades.
+func (s *Server) handleOrderbookTrades(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	trades, err := s.getOrderbookEngine().GetTrades(ctx, 30)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to fetch trades: "+err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"trades": trades,
+	})
+}
+
+// [Orderbook] handleUserOrders returns all orders for a specific user address.
+func (s *Server) handleUserOrders(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	addrStr := r.URL.Query().Get("address")
+	if addrStr == "" && s.wallet != nil {
+		addrStr = string(s.wallet.Address())
+	}
+	if addrStr == "" {
+		respondError(w, http.StatusBadRequest, "address parameter required")
+		return
+	}
+
+	orders, err := s.getOrderbookEngine().GetUserOrders(ctx, crypto.Address(addrStr))
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to fetch user orders: "+err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"orders": orders,
+	})
+}
+
+type placeOrderReq struct {
+	User   string       `json:"user"`
+	Side   string       `json:"side"`
+	Price  float64      `json:"price"`
+	Amount token.Amount `json:"amount"`
+}
+
+// [Orderbook] handlePlaceOrder submits a new limit buy or sell order to the orderbook.
+func (s *Server) handlePlaceOrder(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req placeOrderReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid order payload")
+		return
+	}
+
+	userAddr := req.User
+	if userAddr == "" && s.wallet != nil {
+		userAddr = string(s.wallet.Address())
+	}
+	if userAddr == "" {
+		respondError(w, http.StatusBadRequest, "user address required")
+		return
+	}
+
+	ord := &orderbook.Order{
+		User:   crypto.Address(userAddr),
+		Side:   orderbook.OrderSide(strings.ToLower(req.Side)),
+		Price:  req.Price,
+		Amount: req.Amount,
+	}
+
+	placed, trades, err := s.getOrderbookEngine().PlaceOrder(ctx, ord)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "order placement failed: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, map[string]interface{}{
+		"order":  placed,
+		"trades": trades,
+	})
+}
+
+type cancelOrderReq struct {
+	OrderID string `json:"order_id"`
+	User    string `json:"user"`
+}
+
+// [Orderbook] handleCancelOrder cancels an open order.
+func (s *Server) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req cancelOrderReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid cancel payload")
+		return
+	}
+
+	userAddr := req.User
+	if userAddr == "" && s.wallet != nil {
+		userAddr = string(s.wallet.Address())
+	}
+
+	if err := s.getOrderbookEngine().CancelOrder(ctx, req.OrderID, crypto.Address(userAddr)); err != nil {
+		respondError(w, http.StatusBadRequest, "failed to cancel order: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":   "cancelled",
+		"order_id": req.OrderID,
+	})
+}
+
+// [Stability] handleStabilityStatus returns the current stability status and seigniorage parameters.
+func (s *Server) handleStabilityStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	status, err := s.getStabilityEngine().GetStatus(ctx)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to get stability status: "+err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, status)
+}
+
+// [Stability] handleStabilityHistory returns price history points for charting.
+func (s *Server) handleStabilityHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	history, err := s.getStabilityEngine().GetPriceHistory(ctx)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to get price history: "+err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"history": history,
+	})
+}
+
+type stakeReq struct {
+	User   string       `json:"user"`
+	Amount token.Amount `json:"amount"`
+}
+
+// [Stability] handleStakeShares stakes LQD tokens into seigniorage shares.
+func (s *Server) handleStakeShares(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req stakeReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid stake payload")
+		return
+	}
+
+	userAddr := req.User
+	if userAddr == "" && s.wallet != nil {
+		userAddr = string(s.wallet.Address())
+	}
+
+	pos, err := s.getStabilityEngine().StakeShares(ctx, crypto.Address(userAddr), req.Amount)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "stake failed: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, pos)
+}
+
+// [Stability] handleUnstakeShares unstakes shares and claims yield.
+func (s *Server) handleUnstakeShares(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req stakeReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid unstake payload")
+		return
+	}
+
+	userAddr := req.User
+	if userAddr == "" && s.wallet != nil {
+		userAddr = string(s.wallet.Address())
+	}
+
+	pos, err := s.getStabilityEngine().UnstakeShares(ctx, crypto.Address(userAddr), req.Amount)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "unstake failed: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, pos)
+}
+
+type bondReq struct {
+	User   string       `json:"user"`
+	Amount token.Amount `json:"amount"`
+}
+
+// [Stability] handleBuyBonds purchases discounted LQD bonds during contraction.
+func (s *Server) handleBuyBonds(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req bondReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid bond payload")
+		return
+	}
+
+	userAddr := req.User
+	if userAddr == "" && s.wallet != nil {
+		userAddr = string(s.wallet.Address())
+	}
+
+	pos, err := s.getStabilityEngine().BuyBonds(ctx, crypto.Address(userAddr), req.Amount)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "buy bonds failed: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, pos)
+}
+
+// [Stability] handleRedeemBonds redeems LQD bonds for LQD + bonus during expansion.
+func (s *Server) handleRedeemBonds(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req bondReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid redemption payload")
+		return
+	}
+
+	userAddr := req.User
+	if userAddr == "" && s.wallet != nil {
+		userAddr = string(s.wallet.Address())
+	}
+
+	pos, err := s.getStabilityEngine().RedeemBonds(ctx, crypto.Address(userAddr), req.Amount)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "redeem bonds failed: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, pos)
 }

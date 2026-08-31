@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 
 	"github.com/n3055/liquid-link/internal/api"
 	"github.com/n3055/liquid-link/internal/blockchain"
@@ -55,34 +56,60 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 	// 3. Initialize Asset Manager
 	assetMgr := token.NewAssetManager(balanceAdapter, store)
 
-	// 4. Crypto Keys & Signer
-	cryptoGen := crypto.NewGenerator()
-	keyPair, err := cryptoGen.GenerateKeyPair()
+	// 4. Crypto Keys & Wallet — persistent wallet storage
+	// [Wallet] Derive wallet storage directory from the BadgerDB storage path.
+	walletDir := filepath.Join(filepath.Dir(cfg.Storage.Path), "wallets")
+	walletRepo, err := wallet.NewFileRepository(walletDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate node key pair: %w", err)
+		return nil, fmt.Errorf("failed to create wallet repository: %w", err)
 	}
 
-	signer, err := crypto.NewSigner(keyPair.PrivateKey)
+	ctx := context.Background()
+	walletAlias := cfg.Node.ID
+	isNewWallet := false
+
+	var w wallet.Wallet
+	w, err = walletRepo.Load(ctx, walletAlias)
+	if err != nil {
+		// No existing wallet found — generate a new one and save it
+		logger.Info("generating new wallet for node", slog.String("node_id", cfg.Node.ID))
+		w, err = wallet.GenerateWallet()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate node wallet: %w", err)
+		}
+		if err := walletRepo.Save(ctx, walletAlias, w); err != nil {
+			return nil, fmt.Errorf("failed to persist node wallet: %w", err)
+		}
+		isNewWallet = true
+	} else {
+		logger.Info("loaded existing wallet", slog.String("node_id", cfg.Node.ID), slog.String("address", string(w.Address())))
+	}
+
+	// Extract key pair for signer and consensus validator registration
+	pubKey := w.ExportPublicKey()
+	signer, err := crypto.NewSigner(crypto.PrivateKey(w.(interface{ ExportPrivateKey() []byte }).ExportPrivateKey()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize signer: %w", err)
 	}
 
 	verifier := crypto.NewVerifier()
-	w := wallet.NewWallet(keyPair)
 
-	// Mint initial genesis allocation to default node wallet
-	ctx := context.Background()
-	_ = assetMgr.Mint(ctx, w.Address(), 100000)
+	// Mint initial genesis allocation only on first-ever wallet creation
+	if isNewWallet {
+		_ = assetMgr.Mint(ctx, w.Address(), 100000)
+		logger.Info("minted genesis allocation", slog.String("address", string(w.Address())), slog.Int("amount", 100000))
+	}
 
 	// 5. Blockchain & Consensus
 	blockRepo := blockchain.NewRepository(store)
+	privKey := crypto.PrivateKey(w.(interface{ ExportPrivateKey() []byte }).ExportPrivateKey())
 	validators := map[string]crypto.PublicKey{
-		cfg.Node.ID: keyPair.PublicKey,
+		cfg.Node.ID: pubKey,
 	}
 
 	bc := blockchain.NewBlockchain(blockRepo, verifier, validators)
 
-	cons, err := consensus.NewEngine(cfg.Node.ID, keyPair.PrivateKey, bc, led, validators, 0.5)
+	cons, err := consensus.NewEngine(cfg.Node.ID, privKey, bc, led, validators, 0.5)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize consensus engine: %w", err)
 	}
@@ -92,7 +119,7 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 	pcnMgr := pcn.NewManager(w.Address(), signer, led, pcnRegistry, assetMgr)
 
 	// 7. Receipt Bridge & Registry
-	receiptReg := receipt.NewRegistry(store, verifier, keyPair.PublicKey)
+	receiptReg := receipt.NewRegistry(store, verifier, pubKey)
 	br := receipt.NewBridge(receiptReg, assetMgr, signer, store)
 
 	// 8. Peer Registry

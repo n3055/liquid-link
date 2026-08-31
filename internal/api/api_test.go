@@ -342,3 +342,125 @@ func TestTransfer_ExplicitSender(t *testing.T) {
 		t.Fatalf("expected 202 Accepted for explicit sender transfer, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
+
+// [API] TestWalletCreateAndHoldingsEndpoint tests wallet creation and holdings retrieval REST endpoints.
+func TestWalletCreateAndHoldingsEndpoint(t *testing.T) {
+	s, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// 1. Create new wallet
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/wallet/create", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created for wallet create, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var createRes map[string]interface{}
+	_ = json.Unmarshal(rr.Body.Bytes(), &createRes)
+	newAddr, ok := createRes["address"].(string)
+	if !ok || newAddr == "" {
+		t.Fatalf("expected valid wallet address in response, got %v", createRes)
+	}
+
+	// 2. Query holdings for created wallet
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/wallet/holdings?address="+newAddr, nil)
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for holdings, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var holdingsRes map[string]interface{}
+	_ = json.Unmarshal(rr.Body.Bytes(), &holdingsRes)
+	if holdingsRes["address"] != newAddr {
+		t.Errorf("expected address %s, got %v", newAddr, holdingsRes["address"])
+	}
+}
+
+// [Orderbook] TestOrderbookEndpoints tests placing limit orders, querying depth, trades, and order cancellation.
+func TestOrderbookEndpoints(t *testing.T) {
+	s, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// 1. Query initial orderbook depth
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/orderbook/depth", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for orderbook depth, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// 2. Place a limit sell order
+	sellPayload := []byte(`{"user":"0xseller_addr","side":"sell","price":1.05,"amount":100}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/orderbook/order", bytes.NewBuffer(sellPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created for sell order, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var sellRes map[string]interface{}
+	_ = json.Unmarshal(rr.Body.Bytes(), &sellRes)
+	ordObj := sellRes["order"].(map[string]interface{})
+	ordID := ordObj["id"].(string)
+
+	// 3. Query user orders
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/orderbook/user-orders?address=0xseller_addr", nil)
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for user orders, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// 4. Cancel order
+	cancelPayload := []byte(fmt.Sprintf(`{"order_id":"%s","user":"0xseller_addr"}`, ordID))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/orderbook/cancel", bytes.NewBuffer(cancelPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for order cancellation, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// [Stability] TestStabilityEndpoints tests seigniorage status, history, staking, and bond operations.
+func TestStabilityEndpoints(t *testing.T) {
+	s, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// 1. Query status
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stability/status", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for stability status, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// 2. Query history
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/stability/history", nil)
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for stability history, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// 3. Mint tokens to staker first
+	stakerAddr := "0xstaker_node"
+	mintPayload := []byte(fmt.Sprintf(`{"address":"%s","amount":1000}`, stakerAddr))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/wallet/mint", bytes.NewBuffer(mintPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	// 4. Stake shares
+	stakePayload := []byte(fmt.Sprintf(`{"user":"%s","amount":300}`, stakerAddr))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/stability/stake", bytes.NewBuffer(stakePayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for staking shares, got %d: %s", rr.Code, rr.Body.String())
+	}
+}

@@ -30,14 +30,14 @@ func TestDashboardRendering(t *testing.T) {
 			}
 
 			body := rr.Body.String()
-			if !strings.Contains(body, "LiquidLink Node Console") {
+			if !strings.Contains(body, "LiquidLink Wallet") {
 				t.Errorf("expected dashboard title in body for %s", path)
 			}
 			if !strings.Contains(body, "test-node-1") {
 				t.Errorf("expected node ID in dashboard body for %s", path)
 			}
-			if !strings.Contains(body, "Interactive Node Operations") {
-				t.Errorf("expected operations section in dashboard body for %s", path)
+			if !strings.Contains(body, "Total balance") {
+				t.Errorf("expected balance section in dashboard body for %s", path)
 			}
 		})
 	}
