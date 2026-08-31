@@ -327,6 +327,9 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 
 // [Ledger] syncPeerCredit broadcasts a credit update for an address to all peer endpoints over HTTP REST.
 func (s *Server) syncPeerCredit(addr crypto.Address, amount token.Amount) {
+	defer func() {
+		_ = recover()
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
 
