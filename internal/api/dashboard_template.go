@@ -355,7 +355,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div class="hero">
     <div class="hero-inner">
       <div class="hero-label">Total balance</div>
-      <div class="hero-balance">{{ .Balance }}<small>LQD</small></div>
+      <div class="hero-balance" id="heroTotalBalance">{{ .Balance }}<small>LQD</small></div>
       <div class="addr-chip">
         <span id="heroAddressAvatar" style="display:inline-flex;align-items:center;margin-right:2px;"></span>
         <span class="a" id="walletAddress">{{ if .Address }}{{ .Address }}{{ else }}No address assigned{{ end }}</span>
@@ -380,10 +380,6 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         <button class="qa-btn" onclick="openScanner('sendReceiver', 'sheetSend')">
           <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4 12h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.4"/></svg></span>
           <span>Scan</span>
-        </button>
-        <button class="qa-btn" onclick="openSheet('sheetMint')">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
-          <span>Dev Mint</span>
         </button>
       </div>
     </div>
@@ -1355,8 +1351,8 @@ async function createNewWalletUI() {
     const res = await postData('/api/v1/wallet/create', {});
     localStorage.setItem('liquidlink_active_wallet', res.address);
     localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
-    await loadActiveWalletUI(res.address);
-    showAlert('Active wallet reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD balance credited)');
+    await loadActiveWalletUI(res.address, res.balance || 1000);
+    showAlert('Active wallet session reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD balance credited)');
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -1452,13 +1448,18 @@ function saveKnownWallet(addr) {
   }
 }
 
-async function loadActiveWalletUI(targetAddr) {
+async function loadActiveWalletUI(targetAddr, initialBalance) {
   const addr = targetAddr || getActiveWallet();
   localStorage.setItem('liquidlink_active_wallet', addr);
   saveKnownWallet(addr);
 
   const walletAddrEl = document.getElementById('walletAddress');
   if (walletAddrEl) walletAddrEl.textContent = addr;
+
+  const heroBalEl = document.getElementById('heroTotalBalance');
+  if (heroBalEl && initialBalance !== undefined) {
+    heroBalEl.innerHTML = initialBalance + '<small>LQD</small>';
+  }
 
   const topbarBtn = document.getElementById('topbarAvatarBtn');
   if (topbarBtn) topbarBtn.innerHTML = generateAvatarSVG(addr, 36);
@@ -1471,11 +1472,8 @@ async function loadActiveWalletUI(targetAddr) {
 
   try {
     const holdings = await fetchData('/api/v1/wallet/holdings?address=' + encodeURIComponent(addr));
-    if (holdings) {
-      const heroBalEl = document.querySelector('.hero-balance');
-      if (heroBalEl && holdings.balance !== undefined) {
-        heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
-      }
+    if (holdings && holdings.balance !== undefined) {
+      if (heroBalEl) heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
     }
   } catch (err) {}
 
