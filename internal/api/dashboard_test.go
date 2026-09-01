@@ -39,6 +39,15 @@ func TestDashboardRendering(t *testing.T) {
 			if !strings.Contains(body, "Total balance") {
 				t.Errorf("expected balance section in dashboard body for %s", path)
 			}
+			if !strings.Contains(body, "async function fetchData") {
+				t.Errorf("expected fetchData helper in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "userStakedShares") {
+				t.Errorf("expected userStakedShares element ID in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "sheetReceiveAddress") {
+				t.Errorf("expected sheetReceiveAddress element ID in dashboard body for %s", path)
+			}
 		})
 	}
 }
