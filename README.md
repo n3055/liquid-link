@@ -6,6 +6,18 @@ The project provides a **transport-agnostic payment network** capable of transfe
 
 ---
 
+## 📚 Documentation & Guides
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — System layer architecture, component wiring, and end-to-end transaction lifecycles.
+- [docs/VALIDATOR_GUIDE.md](docs/VALIDATOR_GUIDE.md) — Multi-validator consensus setup, leader rotation, and operational guide.
+- [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md) — Step-by-step interactive Web UI walkthrough and feature demonstration manual.
+- [docs/PCN_SPEC.md](docs/PCN_SPEC.md) — State channel state machines, sequence co-signatures, and dispute timelock protocols.
+- [docs/STABILITY.md](docs/STABILITY.md) — LQD/INR limit orderbook matching engine, seigniorage expansion/contraction, and yield math.
+- [docs/FIAT_BRIDGE.md](docs/FIAT_BRIDGE.md) — Cryptographic UTR mappings, receipt verification, and fiat pool settlement workflows.
+- [docs/TRANSPORT.md](docs/TRANSPORT.md) — Transport abstraction, TCP/IP driver, and Bluetooth Mesh flooding drivers.
+
+---
+
 ## Key Features
 
 - **Non-Custodial Client Wallet:** Client-side Web Crypto key generation and cryptographic Ed25519 transaction signing performed directly in the browser (MetaMask / Phantom style).
