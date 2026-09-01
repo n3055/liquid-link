@@ -48,6 +48,18 @@ func TestDashboardRendering(t *testing.T) {
 			if !strings.Contains(body, "sheetReceiveAddress") {
 				t.Errorf("expected sheetReceiveAddress element ID in dashboard body for %s", path)
 			}
+			if !strings.Contains(body, "refreshDashboardData") {
+				t.Errorf("expected refreshDashboardData live refetch helper in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "obBidsContainer") {
+				t.Errorf("expected obBidsContainer element ID in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "channelsListContainer") {
+				t.Errorf("expected channelsListContainer element ID in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "bridgeListContainer") {
+				t.Errorf("expected bridgeListContainer element ID in dashboard body for %s", path)
+			}
 		})
 	}
 }

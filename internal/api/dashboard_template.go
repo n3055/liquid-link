@@ -388,9 +388,9 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <!-- Secondary metrics -->
   <div class="stat-strip">
     <div class="stat-card"><div class="stat-title">Status</div><div class="status-pill"><span class="dot"></span>Online</div></div>
-    <div class="stat-card"><div class="stat-title">Total supply</div><div class="stat-val">{{ .TotalSupply }}</div></div>
-    <div class="stat-card"><div class="stat-title">Block height</div><div class="stat-val">{{ .BlockHeight }}</div></div>
-    <div class="stat-card"><div class="stat-title">Peers</div><div class="stat-val">{{ .PeerCount }}</div></div>
+    <div class="stat-card"><div class="stat-title">Total supply</div><div class="stat-val" id="statTotalSupply">{{ .TotalSupply }}</div></div>
+    <div class="stat-card"><div class="stat-title">Block height</div><div class="stat-val" id="statBlockHeight">{{ .BlockHeight }}</div></div>
+    <div class="stat-card"><div class="stat-title">Peers</div><div class="stat-val" id="statPeerCount">{{ .PeerCount }}</div></div>
   </div>
 
   <!-- Segmented control & Operations header -->
@@ -409,7 +409,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="segOrderbook" class="panel active">
     <div class="section-card">
       <div class="section-head">
-        <h2>LQD / INR Orderbook <span class="count">Clearing Price: ₹{{ if .StabilityStatus }}{{ printf "%.2f" .StabilityStatus.Price }}{{ else }}1.00{{ end }} INR</span></h2>
+        <h2>LQD / INR Orderbook <span class="count" id="obClearingPrice">Clearing Price: ₹{{ if .StabilityStatus }}{{ printf "%.2f" .StabilityStatus.Price }}{{ else }}1.00{{ end }} INR</span></h2>
       </div>
 
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px; padding:16px;">
@@ -419,7 +419,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
             <div>
               <h4 style="font-size:0.8rem; color:var(--success); margin-bottom:6px;">Bids (Buy LQD)</h4>
-              <div style="font-family:var(--font-mono); font-size:0.8rem;">
+              <div id="obBidsContainer" style="font-family:var(--font-mono); font-size:0.8rem;">
                 {{ range .OrderbookDepth.Bids }}
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                   <span style="color:var(--success);">₹{{ printf "%.2f" .Price }}</span>
@@ -432,7 +432,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
             </div>
             <div>
               <h4 style="font-size:0.8rem; color:var(--red); margin-bottom:6px;">Asks (Sell LQD)</h4>
-              <div style="font-family:var(--font-mono); font-size:0.8rem;">
+              <div id="obAsksContainer" style="font-family:var(--font-mono); font-size:0.8rem;">
                 {{ range .OrderbookDepth.Asks }}
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                   <span style="color:var(--red);">₹{{ printf "%.2f" .Price }}</span>
@@ -471,7 +471,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       </div>
 
       <!-- Executed Trades Log -->
-      <div style="padding:16px; border-top:1px solid var(--border);">
+      <div id="obTradesContainer" style="padding:16px; border-top:1px solid var(--border);">
         <h3 style="font-size:0.9rem; color:var(--text-dim); margin-bottom:10px;">Recent Trades</h3>
         {{ range .OrderbookTrades }}
         <div class="list-row">
@@ -495,7 +495,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="segStability" class="panel">
     <div class="section-card">
       <div class="section-head">
-        <h2>Seigniorage Peg & Holdings <span class="badge {{ if eq (printf "%v" .StabilityStatus.State) "expansion" }}badge-active{{ else }}badge-pending{{ end }}">{{ .StabilityStatus.State }}</span></h2>
+        <h2>Seigniorage Peg & Holdings <span class="badge {{ if eq (printf "%v" .StabilityStatus.State) "expansion" }}badge-active{{ else }}badge-pending{{ end }}" id="stabilityStateBadge">{{ .StabilityStatus.State }}</span></h2>
       </div>
 
       <div style="padding:16px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; border-bottom:1px solid var(--border);">
@@ -505,11 +505,11 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         </div>
         <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
           <div style="font-size:0.75rem; color:var(--text-dim);">Current Market Price</div>
-          <div style="font-size:1.1rem; font-weight:700; color:var(--accent-strong);">₹{{ if .StabilityStatus }}{{ printf "%.2f" .StabilityStatus.Price }}{{ else }}1.00{{ end }} INR</div>
+          <div style="font-size:1.1rem; font-weight:700; color:var(--accent-strong);" id="marketPriceVal">₹{{ if .StabilityStatus }}{{ printf "%.2f" .StabilityStatus.Price }}{{ else }}1.00{{ end }} INR</div>
         </div>
         <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
           <div style="font-size:0.75rem; color:var(--text-dim);">Staking Yield APY</div>
-          <div style="font-size:1.1rem; font-weight:700; color:var(--amber);">{{ if .StabilityStatus }}{{ printf "%.1f" .StabilityStatus.CurrentAPY }}{{ else }}14.5{{ end }}%</div>
+          <div style="font-size:1.1rem; font-weight:700; color:var(--amber);" id="stakingApyVal">{{ if .StabilityStatus }}{{ printf "%.1f" .StabilityStatus.CurrentAPY }}{{ else }}14.5{{ end }}%</div>
         </div>
         <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
           <div style="font-size:0.75rem; color:var(--text-dim);">Staked Shares</div>
@@ -570,12 +570,13 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="segChannels" class="panel active">
     <div class="section-card">
       <div class="section-head">
-        <h2>State channels <span class="count">({{ len .Channels }})</span></h2>
+        <h2>State channels <span class="count" id="channelsCount">({{ len .Channels }})</span></h2>
         <div class="head-actions">
           <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetChannel')">Manage</button>
           <button class="btn btn-sm btn-ghost" onclick="openSheet('sheetChannel')">+ Open</button>
         </div>
       </div>
+      <div id="channelsListContainer">
       {{ range .Channels }}
       <div class="list-row">
         <div class="row-main">
@@ -590,6 +591,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       {{ else }}
       <div class="empty-row">No active state channels yet. Tap "+ Open" to create one.</div>
       {{ end }}
+      </div>
     </div>
   </div>
 
@@ -597,11 +599,12 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="segBridge" class="panel">
     <div class="section-card">
       <div class="section-head">
-        <h2>Fiat bridge <span class="count">({{ len .UTRMappings }})</span></h2>
+        <h2>Fiat bridge <span class="count" id="bridgeCount">({{ len .UTRMappings }})</span></h2>
         <div class="head-actions">
           <button class="btn btn-sm btn-ghost" onclick="openSheet('sheetBridge')">+ Request</button>
         </div>
       </div>
+      <div id="bridgeListContainer">
       {{ range .UTRMappings }}
       <div class="list-row">
         <div class="row-main">
@@ -615,6 +618,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       {{ else }}
       <div class="empty-row">No fiat bridge requests yet.</div>
       {{ end }}
+      </div>
     </div>
   </div>
 
@@ -622,8 +626,9 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="segActivity" class="panel">
     <div class="section-card">
       <div class="section-head">
-        <h2>Recent blocks <span class="count">({{ len .RecentBlocks }})</span></h2>
+        <h2>Recent blocks <span class="count" id="blocksCount">({{ len .RecentBlocks }})</span></h2>
       </div>
+      <div id="blocksListContainer">
       {{ range .RecentBlocks }}
       <div class="list-row">
         <div class="row-main">
@@ -638,6 +643,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       {{ else }}
       <div class="empty-row">No blocks produced yet.</div>
       {{ end }}
+      </div>
     </div>
   </div>
 
@@ -1161,7 +1167,7 @@ async function submitTransfer(e) {
     const sender = getActiveWallet();
     const res = await postData('/api/v1/wallet/transfer', { sender, receiver, amount }, btn);
     showAlert('Successfully sent ' + res.amount + ' LQD!');
-    setTimeout(() => loadActiveWalletUI(), 800);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1176,7 +1182,7 @@ async function submitMint(e) {
 
     const res = await postData('/api/v1/wallet/mint', { address, amount }, btn);
     showAlert('Minted successfully! New balance: ' + res.new_balance);
-    setTimeout(() => loadActiveWalletUI(), 800);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1191,7 +1197,7 @@ async function submitOpenChannel(e) {
 
     const res = await postData('/api/v1/channels/open', { counterparty, amount }, btn);
     showAlert('State channel opened: ' + res.id);
-    setTimeout(() => location.reload(), 1000);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1207,7 +1213,7 @@ async function submitUpdateChannel(e) {
 
     const res = await postData('/api/v1/channels/update', { channel_id, amount, sending }, btn);
     showAlert('Channel updated (Seq ' + res.sequence + ')');
-    setTimeout(() => location.reload(), 1000);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1217,7 +1223,7 @@ async function submitSettleChannel(action) {
     if (!channel_id) { showAlert('Channel ID is required', true); return; }
     await postData('/api/v1/channels/settle', { channel_id, action });
     showAlert('Settlement ' + action + ' executed');
-    setTimeout(() => location.reload(), 1000);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1227,7 +1233,7 @@ async function submitChallengeChannel() {
     if (!channel_id) { showAlert('Channel ID is required', true); return; }
     await postData('/api/v1/channels/challenge', { channel_id });
     showAlert('Dispute challenged with higher sequence co-signature!');
-    setTimeout(() => location.reload(), 1000);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1242,7 +1248,7 @@ async function submitBridgeRequest(e) {
 
     const res = await postData('/api/v1/bridge/fiat-request', { receiver, amount }, btn);
     showAlert('Bridge request created! UTR: ' + res.mapping.utr);
-    setTimeout(() => location.reload(), 1000);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1256,7 +1262,7 @@ async function submitVerifyReceipt(e) {
 
     const res = await postData('/api/v1/bridge/verify-receipt', { utr, receipt_id }, btn);
     showAlert('Receipt verified and settled for UTR: ' + res.utr);
-    setTimeout(() => location.reload(), 1000);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1361,6 +1367,7 @@ async function createNewWalletUI() {
     localStorage.setItem('liquidlink_active_wallet', res.address);
     localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
     await loadActiveWalletUI(res.address, res.balance || 1000);
+    refreshDashboardData();
     showAlert('Active wallet session reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD balance credited)');
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
@@ -1380,7 +1387,7 @@ async function submitOrderbookOrder(e) {
 
     const res = await postData('/api/v1/orderbook/order', { user, side, price, amount }, btn);
     showAlert('Order placed successfully! Trades executed: ' + (res.trades ? res.trades.length : 0));
-    setTimeout(() => loadActiveWalletUI(), 800);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1394,7 +1401,7 @@ async function submitStakeShares(e) {
 
     const res = await postData('/api/v1/stability/stake', { user, amount }, btn);
     showAlert('Successfully staked ' + amount + ' LQD into shares! Staked shares: ' + res.staked_shares);
-    setTimeout(() => loadActiveWalletUI(), 800);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1406,7 +1413,7 @@ async function submitUnstakeShares() {
 
     const res = await postData('/api/v1/stability/unstake', { user, amount });
     showAlert('Successfully unstaked ' + amount + ' shares & claimed yield payout!');
-    setTimeout(() => loadActiveWalletUI(), 800);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1420,7 +1427,7 @@ async function submitBuyBonds(e) {
 
     const res = await postData('/api/v1/stability/buy-bonds', { user, amount }, btn);
     showAlert('Successfully purchased ' + amount + ' discounted bonds!');
-    setTimeout(() => loadActiveWalletUI(), 800);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1432,7 +1439,7 @@ async function submitRedeemBonds() {
 
     const res = await postData('/api/v1/stability/redeem-bonds', { user, amount });
     showAlert('Successfully redeemed ' + amount + ' bonds + bonus payout!');
-    setTimeout(() => loadActiveWalletUI(), 800);
+    refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1522,11 +1529,183 @@ function renderWalletsListUI() {
 
 function switchActiveWallet(addr) {
   loadActiveWalletUI(addr);
+  refreshDashboardData();
   showAlert('Switched active wallet to ' + addr.substring(0, 14) + '...');
 }
 
+/* ---------- Live Dynamic Data Refetching ---------- */
+async function refreshOrderbookUI() {
+  try {
+    const depth = await fetchData('/api/v1/orderbook/depth');
+    if (depth) {
+      const bidsEl = document.getElementById('obBidsContainer');
+      if (bidsEl) {
+        if (depth.bids && depth.bids.length > 0) {
+          let html = '';
+          depth.bids.forEach(b => {
+            const priceStr = (typeof b.price === 'number') ? b.price.toFixed(2) : b.price;
+            html += '<div style="display:flex; justify-content:space-between; margin-bottom:4px;">' +
+              '<span style="color:var(--success);">₹' + priceStr + '</span>' +
+              '<span>' + b.quantity + ' LQD</span></div>';
+          });
+          bidsEl.innerHTML = html;
+        } else {
+          bidsEl.innerHTML = '<div style="color:var(--text-faint);">No open bids</div>';
+        }
+      }
+      const asksEl = document.getElementById('obAsksContainer');
+      if (asksEl) {
+        if (depth.asks && depth.asks.length > 0) {
+          let html = '';
+          depth.asks.forEach(a => {
+            const priceStr = (typeof a.price === 'number') ? a.price.toFixed(2) : a.price;
+            html += '<div style="display:flex; justify-content:space-between; margin-bottom:4px;">' +
+              '<span style="color:var(--red);">₹' + priceStr + '</span>' +
+              '<span>' + a.quantity + ' LQD</span></div>';
+          });
+          asksEl.innerHTML = html;
+        } else {
+          asksEl.innerHTML = '<div style="color:var(--text-faint);">No open asks</div>';
+        }
+      }
+    }
+  } catch (err) {}
+
+  try {
+    const res = await fetchData('/api/v1/orderbook/trades');
+    const trades = res.trades || res;
+    const tradesEl = document.getElementById('obTradesContainer');
+    if (tradesEl && Array.isArray(trades)) {
+      if (trades.length > 0) {
+        let html = '<h3 style="font-size:0.9rem; color:var(--text-dim); margin-bottom:10px;">Recent Trades</h3>';
+        trades.forEach(t => {
+          const priceStr = (typeof t.price === 'number') ? t.price.toFixed(2) : t.price;
+          html += '<div class="list-row"><div class="row-main"><div class="row-title">Trade #' + t.id + '</div>' +
+            '<div class="row-sub">' + (t.buyer || '') + ' ← ' + (t.seller || '') + '</div></div>' +
+            '<div class="row-side"><div class="top" style="color:var(--accent-strong);">₹' + priceStr + ' INR</div>' +
+            '<div class="bottom">' + t.amount + ' LQD</div></div></div>';
+        });
+        tradesEl.innerHTML = html;
+      } else {
+        tradesEl.innerHTML = '<h3 style="font-size:0.9rem; color:var(--text-dim); margin-bottom:10px;">Recent Trades</h3><div class="empty-row">No trades executed yet on the orderbook.</div>';
+      }
+    }
+  } catch (err) {}
+}
+
+async function refreshChannelsUI() {
+  try {
+    const res = await fetchData('/api/v1/channels/list');
+    const channels = res.channels || [];
+    const countEl = document.getElementById('channelsCount');
+    if (countEl) countEl.textContent = '(' + channels.length + ')';
+
+    const container = document.getElementById('channelsListContainer');
+    if (container) {
+      if (channels.length > 0) {
+        let html = '';
+        channels.forEach(ch => {
+          const isOpened = ch.state === 'OPEN' || ch.state === 0;
+          const stateStr = isOpened ? 'OPEN' : ch.state;
+          const badgeClass = isOpened ? 'badge-active' : 'badge-pending';
+          const partyA = (ch.share && ch.share.party_a) || (ch.share && ch.share.PartyA) || '';
+          const partyB = (ch.share && ch.share.party_b) || (ch.share && ch.share.PartyB) || '';
+          const balA = (ch.share && ch.share.balance_party_a) !== undefined ? ch.share.balance_party_a : (ch.share && ch.share.BalancePartyA);
+          const balB = (ch.share && ch.share.balance_party_b) !== undefined ? ch.share.balance_party_b : (ch.share && ch.share.BalancePartyB);
+
+          html += '<div class="list-row"><div class="row-main">' +
+            '<div class="row-title">' + ch.id + ' <span class="badge ' + badgeClass + '">' + stateStr + '</span></div>' +
+            '<div class="row-sub">' + partyA + ' → ' + partyB + '</div></div>' +
+            '<div class="row-side"><div class="top">' + balA + ' / ' + balB + '</div>' +
+            '<div class="bottom">seq ' + ch.sequence + '</div></div></div>';
+        });
+        container.innerHTML = html;
+      } else {
+        container.innerHTML = '<div class="empty-row">No active state channels yet. Tap "+ Open" to create one.</div>';
+      }
+    }
+  } catch (err) {}
+}
+
+async function refreshBridgeUI() {
+  try {
+    const res = await fetchData('/api/v1/bridge/list');
+    const mappings = res.mappings || [];
+    const countEl = document.getElementById('bridgeCount');
+    if (countEl) countEl.textContent = '(' + mappings.length + ')';
+
+    const container = document.getElementById('bridgeListContainer');
+    if (container) {
+      if (mappings.length > 0) {
+        let html = '';
+        mappings.forEach(m => {
+          const isSettled = m.status === 'SETTLED' || m.status === 2;
+          const statusStr = isSettled ? 'SETTLED' : m.status;
+          const badgeClass = isSettled ? 'badge-settled' : 'badge-pending';
+          const txId = m.transaction_id || m.TransactionID || '';
+
+          html += '<div class="list-row"><div class="row-main">' +
+            '<div class="row-title">' + m.utr + ' <span class="badge ' + badgeClass + '">' + statusStr + '</span></div>' +
+            '<div class="row-sub">Tx ' + txId + '</div></div>' +
+            '<div class="row-side"><div class="bottom">' + (m.created_at || '') + '</div></div></div>';
+        });
+        container.innerHTML = html;
+      } else {
+        container.innerHTML = '<div class="empty-row">No fiat bridge requests yet.</div>';
+      }
+    }
+  } catch (err) {}
+}
+
+async function refreshStabilityUI() {
+  try {
+    const status = await fetchData('/api/v1/stability/status');
+    if (status) {
+      const priceStr = (typeof status.price === 'number') ? status.price.toFixed(2) : status.price;
+      const apyStr = (typeof status.current_apy === 'number') ? status.current_apy.toFixed(1) : status.current_apy;
+
+      const pEl = document.getElementById('marketPriceVal');
+      if (pEl) pEl.textContent = '₹' + priceStr + ' INR';
+
+      const obClrEl = document.getElementById('obClearingPrice');
+      if (obClrEl) obClrEl.textContent = 'Clearing Price: ₹' + priceStr + ' INR';
+
+      const apyEl = document.getElementById('stakingApyVal');
+      if (apyEl) apyEl.textContent = apyStr + '%';
+
+      const stBadge = document.getElementById('stabilityStateBadge');
+      if (stBadge) {
+        stBadge.textContent = status.state;
+        stBadge.className = 'badge ' + (status.state === 'expansion' ? 'badge-active' : 'badge-pending');
+      }
+    }
+  } catch (err) {}
+}
+
+async function refreshBlockchainUI() {
+  try {
+    const res = await fetchData('/api/v1/blockchain/height');
+    if (res && res.height !== undefined) {
+      const hEl = document.getElementById('statBlockHeight');
+      if (hEl) hEl.textContent = res.height;
+    }
+  } catch (err) {}
+}
+
+async function refreshDashboardData() {
+  await Promise.allSettled([
+    loadActiveWalletUI(),
+    refreshOrderbookUI(),
+    refreshChannelsUI(),
+    refreshBridgeUI(),
+    refreshStabilityUI(),
+    refreshBlockchainUI()
+  ]);
+}
+
 function initAvatars() {
-  loadActiveWalletUI();
+  refreshDashboardData();
+  setInterval(refreshDashboardData, 3000);
 }
 
 document.addEventListener('DOMContentLoaded', initAvatars);

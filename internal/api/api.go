@@ -151,6 +151,7 @@ func (s *Server) setupRoutes() {
 
 		// Bridge / Settlement actions
 		r.Route("/bridge", func(br chi.Router) {
+			br.Get("/list", s.handleListUTRMappings)
 			br.Post("/fiat-request", s.handleBridgeRequest)
 			br.Post("/verify-receipt", s.handleVerifyReceipt)
 			br.Get("/utr/{utr}", s.handleGetUTRMapping)
@@ -835,6 +836,29 @@ func (s *Server) handleGetUTRMapping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, mapping)
+}
+
+// [API] handleListUTRMappings returns all fiat bridge UTR mappings in the system.
+func (s *Server) handleListUTRMappings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if s.receiptRegistry == nil {
+		respondJSON(w, http.StatusOK, map[string]interface{}{"mappings": []interface{}{}})
+		return
+	}
+
+	mappings, err := s.receiptRegistry.ListUTRMapping(ctx)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to list UTR mappings: "+err.Error())
+		return
+	}
+
+	if mappings == nil {
+		mappings = []*receipt.UTRMapping{}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"mappings": mappings,
+	})
 }
 
 func (s *Server) handleBlockchainHeight(w http.ResponseWriter, r *http.Request) {
