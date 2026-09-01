@@ -359,7 +359,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       <div class="addr-chip">
         <span id="heroAddressAvatar" style="display:inline-flex;align-items:center;margin-right:2px;"></span>
         <span class="a" id="walletAddress">{{ if .Address }}{{ .Address }}{{ else }}No address assigned{{ end }}</span>
-        <button class="icon-btn-mini" onclick="copyText('{{ .Address }}', this)" aria-label="Copy address">
+        <button class="icon-btn-mini" onclick="copyText(getActiveWallet(), this)" aria-label="Copy address">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" stroke-width="2"/></svg>
         </button>
       </div>
@@ -513,11 +513,11 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         </div>
         <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
           <div style="font-size:0.75rem; color:var(--text-dim);">Staked Shares</div>
-          <div style="font-size:1.1rem; font-weight:700;">{{ .StakedShares }} Shares</div>
+          <div style="font-size:1.1rem; font-weight:700;" id="userStakedShares">{{ .StakedShares }} Shares</div>
         </div>
         <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
           <div style="font-size:0.75rem; color:var(--text-dim);">Bonds Held</div>
-          <div style="font-size:1.1rem; font-weight:700;">{{ .BondsHeld }} Bonds</div>
+          <div style="font-size:1.1rem; font-weight:700;" id="userBondsHeld">{{ .BondsHeld }} Bonds</div>
         </div>
       </div>
 
@@ -695,8 +695,8 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div class="sheet-handle"></div>
   <div class="sheet-head"><h3>Receive</h3><button class="sheet-close" onclick="closeSheet('sheetReceive')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <div class="qr-wrap" id="qrReceive"></div>
-  <div class="qr-address">{{ if .Address }}{{ .Address }}{{ else }}No address assigned{{ end }}</div>
-  <button class="btn" onclick="copyText('{{ .Address }}', this)">Copy address</button>
+  <div class="qr-address" id="sheetReceiveAddress">{{ if .Address }}{{ .Address }}{{ else }}No address assigned{{ end }}</div>
+  <button class="btn" onclick="copyText(getActiveWallet(), this)">Copy address</button>
 </div></div>
 
 <!-- Scan -->
@@ -971,7 +971,9 @@ function openReceive() {
   openSheet('sheetReceive');
   const target = document.getElementById('qrReceive');
   target.innerHTML = '';
-  const address = {{ if .Address }}"{{ .Address }}"{{ else }}""{{ end }};
+  const address = getActiveWallet();
+  const addrEl = document.getElementById('sheetReceiveAddress');
+  if (addrEl) addrEl.textContent = address || 'No address assigned';
   if (address && window.QRCode) {
     new QRCode(target, { text: address, width: 200, height: 200, colorDark: '#08090d', colorLight: '#ffffff' });
   } else if (address) {
@@ -1117,6 +1119,13 @@ function closeSheetAndStopScan(e) {
 }
 
 /* ---------- API calls & Form Submissions ---------- */
+async function fetchData(url) {
+  const resp = await fetch(url);
+  const resData = await resp.json();
+  if (!resp.ok) throw new Error(resData.error || 'Request failed with status ' + resp.status);
+  return resData;
+}
+
 async function postData(url, data, submitBtn) {
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -1472,8 +1481,18 @@ async function loadActiveWalletUI(targetAddr, initialBalance) {
 
   try {
     const holdings = await fetchData('/api/v1/wallet/holdings?address=' + encodeURIComponent(addr));
-    if (holdings && holdings.balance !== undefined) {
-      if (heroBalEl) heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
+    if (holdings) {
+      if (holdings.balance !== undefined && heroBalEl) {
+        heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
+      }
+      const stEl = document.getElementById('userStakedShares');
+      if (stEl && holdings.staked_shares !== undefined) {
+        stEl.textContent = holdings.staked_shares + ' Shares';
+      }
+      const bdEl = document.getElementById('userBondsHeld');
+      if (bdEl && holdings.bonds_held !== undefined) {
+        bdEl.textContent = holdings.bonds_held + ' Bonds';
+      }
     }
   } catch (err) {}
 
