@@ -272,6 +272,14 @@ func TestFiatBridgeEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 OK for UTR query, got %d", rr.Code)
 	}
 
+	// 2b. List UTR Mappings
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/bridge/list", nil)
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for UTR list query, got %d", rr.Code)
+	}
+
 	// 3. Verify Receipt
 	verifyBody := []byte(fmt.Sprintf(`{"utr":"%s","receipt_id":"rec-123"}`, utr))
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/bridge/verify-receipt", bytes.NewBuffer(verifyBody))
