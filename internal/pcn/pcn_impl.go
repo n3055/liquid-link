@@ -230,6 +230,36 @@ func (m *managerImpl) InitiateSettlement(ctx context.Context, channelID string) 
 	}
 
 	ch.State = StateClosing
+	ch.Bond.Expiry = time.Now().Add(24 * time.Hour)
+	return m.registry.RegisterChannel(ctx, ch)
+}
+
+func (m *managerImpl) ChallengeSettlement(ctx context.Context, channelID string, higherSeqChannel *Channel) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if higherSeqChannel == nil {
+		return errors.New("nil challenge channel state")
+	}
+
+	ch, err := m.registry.GetChannel(ctx, channelID)
+	if err != nil {
+		return err
+	}
+
+	if ch.State != StateClosing {
+		return errors.New("channel is not in closing state")
+	}
+
+	if higherSeqChannel.Sequence <= ch.Sequence {
+		return fmt.Errorf("challenge sequence %d must be strictly higher than current sequence %d", higherSeqChannel.Sequence, ch.Sequence)
+	}
+
+	// Update channel state with higher sequence numbers
+	ch.Sequence = higherSeqChannel.Sequence
+	ch.Share = higherSeqChannel.Share
+	ch.Signature = higherSeqChannel.Signature
+
 	return m.registry.RegisterChannel(ctx, ch)
 }
 

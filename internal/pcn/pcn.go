@@ -53,6 +53,9 @@ type Manager interface {
 	// InitiateSettlement starts the dispute/settlement period.
 	InitiateSettlement(ctx context.Context, channelID string) error
 
+	// ChallengeSettlement challenges a closing channel with a higher sequence co-signed state payload.
+	ChallengeSettlement(ctx context.Context, channelID string, higherSeqChannel *Channel) error
+
 	// FinalizeSettlement closes the channel and distributes locked funds based on the last state.
 	FinalizeSettlement(ctx context.Context, channelID string) error
 }
