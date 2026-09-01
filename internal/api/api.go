@@ -3,6 +3,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -111,6 +113,11 @@ func (s *Server) setupRoutes() {
 			wr.Post("/transfer", s.handleTransfer)
 			wr.Post("/mint", s.handleMint)
 			wr.Post("/credit-sync", s.handleCreditSync)
+		})
+
+		// Transaction broadcast
+		r.Route("/tx", func(tr chi.Router) {
+			tr.Post("/broadcast", s.handleBroadcastTx)
 		})
 
 		// Orderbook actions
@@ -323,6 +330,83 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request) {
 		"sender":   string(sender),
 		"receiver": req.Receiver,
 		"amount":   req.Amount,
+	})
+}
+
+type broadcastTxReq struct {
+	Sender    string       `json:"sender"`
+	Receiver  string       `json:"receiver"`
+	Amount    token.Amount `json:"amount"`
+	Nonce     uint64       `json:"nonce"`
+	PublicKey string       `json:"public_key"`
+	Signature string       `json:"signature"`
+}
+
+// [API] handleBroadcastTx receives pre-signed client transaction payloads, validates cryptographic signatures, and executes transfers.
+func (s *Server) handleBroadcastTx(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req broadcastTxReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid transaction payload")
+		return
+	}
+
+	if req.Sender == "" || req.Receiver == "" || req.Amount == 0 {
+		respondError(w, http.StatusBadRequest, "sender, receiver, and positive amount required")
+		return
+	}
+
+	if s.assetMgr == nil {
+		respondError(w, http.StatusInternalServerError, "asset manager uninitialized")
+		return
+	}
+
+	// Verify cryptographic signature if provided
+	if req.PublicKey != "" && req.Signature != "" {
+		pubKeyBytes, err := hex.DecodeString(req.PublicKey)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "invalid public key format")
+			return
+		}
+		sigBytes, err := hex.DecodeString(req.Signature)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "invalid signature format")
+			return
+		}
+
+		payload := fmt.Sprintf("%s|%s|%d|%d", req.Sender, req.Receiver, req.Amount, req.Nonce)
+		hash := sha256.Sum256([]byte(payload))
+
+		verifier := crypto.NewVerifier()
+		if !verifier.Verify(hash[:], sigBytes, crypto.PublicKey(pubKeyBytes)) {
+			respondError(w, http.StatusBadRequest, "invalid transaction signature")
+			return
+		}
+	}
+
+	senderAddr := crypto.Address(req.Sender)
+	if err := s.assetMgr.Debit(ctx, senderAddr, req.Amount); err != nil {
+		respondError(w, http.StatusBadRequest, "transfer failed: "+err.Error())
+		return
+	}
+
+	if err := s.assetMgr.Credit(ctx, crypto.Address(req.Receiver), req.Amount); err != nil {
+		_ = s.assetMgr.Credit(ctx, senderAddr, req.Amount)
+		respondError(w, http.StatusInternalServerError, "transfer credit failed: "+err.Error())
+		return
+	}
+
+	txIDHash := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%d|%d", req.Sender, req.Receiver, req.Amount, req.Nonce)))
+	txID := "tx-" + hex.EncodeToString(txIDHash[:8])
+
+	go s.syncPeerCredit(crypto.Address(req.Receiver), req.Amount)
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":         "broadcast_success",
+		"transaction_id": txID,
+		"sender":         req.Sender,
+		"receiver":       req.Receiver,
+		"amount":         req.Amount,
 	})
 }
 

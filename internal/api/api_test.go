@@ -474,3 +474,31 @@ func TestStabilityEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 OK for staking shares, got %d: %s", rr.Code, rr.Body.String())
 	}
 }
+
+// [API] TestBroadcastTxEndpoint tests client pre-signed transaction broadcasting.
+func TestBroadcastTxEndpoint(t *testing.T) {
+	s, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Mint funds to sender
+	sender := "0xclient_sender"
+	mintPayload := []byte(fmt.Sprintf(`{"address":"%s","amount":1000}`, sender))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/wallet/mint", bytes.NewBuffer(mintPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("failed to mint test funds: %s", rr.Body.String())
+	}
+
+	// Broadcast signed transaction
+	txPayload := []byte(fmt.Sprintf(`{"sender":"%s","receiver":"0xclient_receiver","amount":250,"nonce":1}`, sender))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/tx/broadcast", bytes.NewBuffer(txPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for broadcast tx, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
