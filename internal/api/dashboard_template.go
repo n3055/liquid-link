@@ -383,7 +383,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         </button>
         <button class="qa-btn" onclick="openSheet('sheetMint')">
           <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
-          <span>Mint</span>
+          <span>Dev Mint</span>
         </button>
       </div>
     </div>
@@ -718,17 +718,20 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 <!-- Mint -->
 <div class="overlay" id="sheetMint"><div class="sheet">
   <div class="sheet-handle"></div>
-  <div class="sheet-head"><h3>Mint tokens</h3><button class="sheet-close" onclick="closeSheet('sheetMint')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div class="sheet-head"><h3>Devnet Faucet / Mint</h3><button class="sheet-close" onclick="closeSheet('sheetMint')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div style="font-size:0.8rem; color:#f59e0b; margin-bottom:12px; padding:8px 12px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:6px; display:flex; align-items:center; gap:8px;">
+    <span>⚡ <strong>Genesis / Devnet Faucet Tool:</strong> Minting is an administrative tool for testnet genesis allocation. Real end-users acquire tokens via transfers, trades, or fiat bridging.</span>
+  </div>
   <form onsubmit="submitMint(event)">
     <div class="form-group">
       <label for="mintAddress">Target address</label>
-      <input type="text" id="mintAddress" placeholder="{{ .Address }} (leave blank for local wallet)">
+      <input type="text" id="mintAddress" placeholder="Target wallet address (blank for active wallet)">
     </div>
     <div class="form-group">
       <label for="mintAmount">Amount</label>
       <input type="number" id="mintAmount" min="1" placeholder="0" required>
     </div>
-    <button type="submit" class="btn">Mint</button>
+    <button type="submit" class="btn">Mint tokens</button>
   </form>
 </div></div>
 
@@ -831,12 +834,15 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 <!-- Profile drawer -->
 <div class="overlay" id="sheetProfile"><div class="sheet">
   <div class="sheet-handle"></div>
-  <div class="sheet-head"><h3>Profile</h3><button class="sheet-close" onclick="closeSheet('sheetProfile')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div class="sheet-head"><h3>Profile & Accounts</h3><button class="sheet-close" onclick="closeSheet('sheetProfile')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <div class="profile-avatar-lg" id="profileAvatarLg"></div>
   <div class="profile-item"><span class="k">Node ID</span><span class="v">{{ .NodeID }}</span></div>
   <div class="profile-item"><span class="k">Port</span><span class="v">{{ .Port }}</span></div>
-  <div class="profile-item"><span class="k">Balance</span><span class="v">{{ .Balance }}</span></div>
   <div class="profile-item"><span class="k">Peers</span><span class="v">{{ .PeerCount }}</span></div>
+
+  <div style="margin-top:16px; font-size:0.85rem; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:0.5px;">Active Account / Local Wallets</div>
+  <div id="profileWalletsList" style="margin-top:8px; display:flex; flex-direction:column; gap:8px; max-height:180px; overflow-y:auto;"></div>
+
   <div style="margin-top:16px;" class="btn-row">
     <button class="btn btn-secondary" onclick="closeSheet('sheetProfile'); openReceive();">Show my QR</button>
     <button class="btn btn-secondary" onclick="closeSheet('sheetProfile'); openScanner('sendReceiver','sheetSend');">Scan code</button>
@@ -1147,9 +1153,10 @@ async function submitTransfer(e) {
     if (!receiver) { showAlert('Receiver address required', true); return; }
     if (isNaN(amount) || amount <= 0) { showAlert('Valid positive amount required', true); return; }
 
-    const res = await postData('/api/v1/wallet/transfer', { receiver, amount }, btn);
+    const sender = getActiveWallet();
+    const res = await postData('/api/v1/wallet/transfer', { sender, receiver, amount }, btn);
     showAlert('Successfully sent ' + res.amount + ' LQD!');
-    setTimeout(() => location.reload(), 1000);
+    setTimeout(() => loadActiveWalletUI(), 800);
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1157,13 +1164,14 @@ async function submitMint(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   try {
-    const address = document.getElementById('mintAddress').value.trim();
+    let address = document.getElementById('mintAddress').value.trim();
+    if (!address) address = getActiveWallet();
     const amount = parseInt(document.getElementById('mintAmount').value, 10);
     if (isNaN(amount) || amount <= 0) { showAlert('Valid positive amount required', true); return; }
 
     const res = await postData('/api/v1/wallet/mint', { address, amount }, btn);
     showAlert('Minted successfully! New balance: ' + res.new_balance);
-    setTimeout(() => location.reload(), 1000);
+    setTimeout(() => loadActiveWalletUI(), 800);
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1333,8 +1341,9 @@ function generateAvatarSVG(address, size) {
 async function createNewWalletUI() {
   try {
     const res = await postData('/api/v1/wallet/create', {});
-    showAlert('New wallet generated! Address: ' + res.address.substring(0, 16) + '... (1000 LQD initial balance credited)');
-    setTimeout(() => location.reload(), 1500);
+    saveKnownWallet(res.address);
+    loadActiveWalletUI(res.address);
+    showAlert('New wallet generated! Address: ' + res.address.substring(0, 16) + '... (1000 LQD balance credited)');
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -1344,15 +1353,16 @@ async function submitOrderbookOrder(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   try {
+    const user = getActiveWallet();
     const side = document.getElementById('obOrderSide').value;
     const price = parseFloat(document.getElementById('obOrderPrice').value);
     const amount = parseInt(document.getElementById('obOrderAmount').value, 10);
     if (isNaN(price) || price <= 0) { showAlert('Valid positive limit price required', true); return; }
     if (isNaN(amount) || amount <= 0) { showAlert('Valid positive token amount required', true); return; }
 
-    const res = await postData('/api/v1/orderbook/order', { side, price, amount }, btn);
+    const res = await postData('/api/v1/orderbook/order', { user, side, price, amount }, btn);
     showAlert('Order placed successfully! Trades executed: ' + (res.trades ? res.trades.length : 0));
-    setTimeout(() => location.reload(), 1200);
+    setTimeout(() => loadActiveWalletUI(), 800);
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1360,23 +1370,25 @@ async function submitStakeShares(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   try {
+    const user = getActiveWallet();
     const amount = parseInt(document.getElementById('stakeAmount').value, 10);
     if (isNaN(amount) || amount <= 0) { showAlert('Valid positive amount required', true); return; }
 
-    const res = await postData('/api/v1/stability/stake', { amount }, btn);
+    const res = await postData('/api/v1/stability/stake', { user, amount }, btn);
     showAlert('Successfully staked ' + amount + ' LQD into shares! Staked shares: ' + res.staked_shares);
-    setTimeout(() => location.reload(), 1200);
+    setTimeout(() => loadActiveWalletUI(), 800);
   } catch (err) { showAlert(err.message, true); }
 }
 
 async function submitUnstakeShares() {
   try {
+    const user = getActiveWallet();
     const amount = parseInt(document.getElementById('stakeAmount').value, 10);
     if (isNaN(amount) || amount <= 0) { showAlert('Valid positive amount required', true); return; }
 
-    const res = await postData('/api/v1/stability/unstake', { amount });
+    const res = await postData('/api/v1/stability/unstake', { user, amount });
     showAlert('Successfully unstaked ' + amount + ' shares & claimed yield payout!');
-    setTimeout(() => location.reload(), 1200);
+    setTimeout(() => loadActiveWalletUI(), 800);
   } catch (err) { showAlert(err.message, true); }
 }
 
@@ -1384,37 +1396,107 @@ async function submitBuyBonds(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   try {
+    const user = getActiveWallet();
     const amount = parseInt(document.getElementById('bondAmount').value, 10);
     if (isNaN(amount) || amount <= 0) { showAlert('Valid positive bond amount required', true); return; }
 
-    const res = await postData('/api/v1/stability/buy-bonds', { amount }, btn);
+    const res = await postData('/api/v1/stability/buy-bonds', { user, amount }, btn);
     showAlert('Successfully purchased ' + amount + ' discounted bonds!');
-    setTimeout(() => location.reload(), 1200);
+    setTimeout(() => loadActiveWalletUI(), 800);
   } catch (err) { showAlert(err.message, true); }
 }
 
 async function submitRedeemBonds() {
   try {
+    const user = getActiveWallet();
     const amount = parseInt(document.getElementById('bondAmount').value, 10);
     if (isNaN(amount) || amount <= 0) { showAlert('Valid positive bond amount required', true); return; }
 
-    const res = await postData('/api/v1/stability/redeem-bonds', { amount });
+    const res = await postData('/api/v1/stability/redeem-bonds', { user, amount });
     showAlert('Successfully redeemed ' + amount + ' bonds + bonus payout!');
-    setTimeout(() => location.reload(), 1200);
+    setTimeout(() => loadActiveWalletUI(), 800);
   } catch (err) { showAlert(err.message, true); }
 }
 
-function initAvatars() {
-  const address = {{ if .Address }}"{{ .Address }}"{{ else }}""{{ end }};
-  
+function getActiveWallet() {
+  return localStorage.getItem('liquidlink_active_wallet') || '{{ .Address }}';
+}
+
+function getKnownWallets() {
+  try {
+    const list = JSON.parse(localStorage.getItem('liquidlink_known_wallets'));
+    if (Array.isArray(list) && list.length > 0) return list;
+  } catch (e) {}
+  return ['{{ .Address }}'];
+}
+
+function saveKnownWallet(addr) {
+  if (!addr) return;
+  const known = getKnownWallets();
+  if (!known.includes(addr)) {
+    known.push(addr);
+    localStorage.setItem('liquidlink_known_wallets', JSON.stringify(known));
+  }
+}
+
+async function loadActiveWalletUI(targetAddr) {
+  const addr = targetAddr || getActiveWallet();
+  localStorage.setItem('liquidlink_active_wallet', addr);
+  saveKnownWallet(addr);
+
+  const walletAddrEl = document.getElementById('walletAddress');
+  if (walletAddrEl) walletAddrEl.textContent = addr;
+
   const topbarBtn = document.getElementById('topbarAvatarBtn');
-  if (topbarBtn) topbarBtn.innerHTML = generateAvatarSVG(address, 36);
-  
+  if (topbarBtn) topbarBtn.innerHTML = generateAvatarSVG(addr, 36);
+
   const profileAvatar = document.getElementById('profileAvatarLg');
-  if (profileAvatar) profileAvatar.innerHTML = generateAvatarSVG(address, 72);
+  if (profileAvatar) profileAvatar.innerHTML = generateAvatarSVG(addr, 72);
 
   const heroAvatar = document.getElementById('heroAddressAvatar');
-  if (heroAvatar) heroAvatar.innerHTML = generateAvatarSVG(address, 22);
+  if (heroAvatar) heroAvatar.innerHTML = generateAvatarSVG(addr, 22);
+
+  try {
+    const holdings = await fetchData('/api/v1/wallet/holdings?address=' + encodeURIComponent(addr));
+    if (holdings) {
+      const heroBalEl = document.querySelector('.hero-balance');
+      if (heroBalEl && holdings.balance !== undefined) {
+        heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
+      }
+    }
+  } catch (err) {}
+
+  renderWalletsListUI();
+}
+
+function renderWalletsListUI() {
+  const container = document.getElementById('profileWalletsList');
+  if (!container) return;
+  const known = getKnownWallets();
+  const active = getActiveWallet();
+
+  let html = '';
+  known.forEach((w, idx) => {
+    const isActive = (w === active);
+    const label = w === '{{ .Address }}' ? 'Node Default' : 'User Wallet ' + (idx);
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:' + (isActive ? 'rgba(79,110,247,0.12)' : 'rgba(255,255,255,0.03)') + ';border:1px solid ' + (isActive ? 'var(--primary)' : 'var(--border)') + ';border-radius:8px;">' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+      generateAvatarSVG(w, 24) +
+      '<div style="display:flex;flex-direction:column;"><span style="font-size:0.82rem;font-weight:600;color:var(--text);">' + label + '</span><span style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-dim);">' + w.substring(0,10) + '...' + w.substring(w.length-6) + '</span></div>' +
+      '</div>' +
+      (isActive ? '<span class="badge badge-settled">Active</span>' : '<button class="btn btn-sm btn-ghost" onclick="switchActiveWallet(\'' + w + '\')">Switch</button>') +
+      '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function switchActiveWallet(addr) {
+  loadActiveWalletUI(addr);
+  showAlert('Switched active wallet to ' + addr.substring(0, 14) + '...');
+}
+
+function initAvatars() {
+  loadActiveWalletUI();
 }
 
 document.addEventListener('DOMContentLoaded', initAvatars);
