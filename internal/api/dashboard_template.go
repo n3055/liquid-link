@@ -356,6 +356,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
     <div class="hero-inner">
       <div class="hero-label">Total balance</div>
       <div class="hero-balance" id="heroTotalBalance">{{ .Balance }}<small>LQD</small></div>
+      <div style="font-size:1.05rem; font-weight:600; color:var(--success); margin-top:2px;" id="heroINRBalance">₹{{ printf "%.2f" .INRBalance }} INR</div>
       <div class="addr-chip">
         <span id="heroAddressAvatar" style="display:inline-flex;align-items:center;margin-right:2px;"></span>
         <span class="a" id="walletAddress">{{ if .Address }}{{ .Address }}{{ else }}No address assigned{{ end }}</span>
@@ -448,7 +449,10 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
         <!-- Place Order Form -->
         <div style="background:var(--surface-2); border-radius:12px; padding:16px; border:1px solid var(--border);">
-          <h3 style="font-size:0.95rem; margin-bottom:12px; color:var(--text);">Place Limit Order</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="font-size:0.95rem; color:var(--text); margin:0;">Place Limit Order</h3>
+            <span style="font-size:0.78rem; color:var(--text-dim);">Available: <strong id="obAvailableINR" style="color:var(--success);">₹{{ printf "%.2f" .INRBalance }} INR</strong></span>
+          </div>
           <form onsubmit="submitOrderbookOrder(event)">
             <div class="field">
               <label>Order Type</label>
@@ -487,6 +491,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         {{ else }}
         <div class="empty-row">No trades executed yet on the orderbook.</div>
         {{ end }}
+      </div>
+
+      <!-- User Active Open Orders -->
+      <div style="padding:16px; border-top:1px solid var(--border);">
+        <h3 style="font-size:0.9rem; color:var(--text-dim); margin-bottom:10px;">My Active Open Orders</h3>
+        <div id="userOrdersContainer">
+          <div class="empty-row">No open limit orders for active wallet.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1366,9 +1378,9 @@ async function createNewWalletUI() {
     const res = await postData('/api/v1/wallet/create', {});
     localStorage.setItem('liquidlink_active_wallet', res.address);
     localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
-    await loadActiveWalletUI(res.address, res.balance || 1000);
+    await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
     refreshDashboardData();
-    showAlert('Active wallet session reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD balance credited)');
+    showAlert('Active wallet session reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD & ₹1000.00 INR credited)');
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -1464,7 +1476,7 @@ function saveKnownWallet(addr) {
   }
 }
 
-async function loadActiveWalletUI(targetAddr, initialBalance) {
+async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance) {
   const addr = targetAddr || getActiveWallet();
   localStorage.setItem('liquidlink_active_wallet', addr);
   saveKnownWallet(addr);
@@ -1475,6 +1487,14 @@ async function loadActiveWalletUI(targetAddr, initialBalance) {
   const heroBalEl = document.getElementById('heroTotalBalance');
   if (heroBalEl && initialBalance !== undefined) {
     heroBalEl.innerHTML = initialBalance + '<small>LQD</small>';
+  }
+
+  const inrBalEl = document.getElementById('heroINRBalance');
+  const obInrEl = document.getElementById('obAvailableINR');
+  if (initialINRBalance !== undefined) {
+    const inrStr = (typeof initialINRBalance === 'number') ? initialINRBalance.toFixed(2) : initialINRBalance;
+    if (inrBalEl) inrBalEl.textContent = '₹' + inrStr + ' INR';
+    if (obInrEl) obInrEl.textContent = '₹' + inrStr + ' INR';
   }
 
   const topbarBtn = document.getElementById('topbarAvatarBtn');
@@ -1491,6 +1511,11 @@ async function loadActiveWalletUI(targetAddr, initialBalance) {
     if (holdings) {
       if (holdings.balance !== undefined && heroBalEl) {
         heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
+      }
+      if (holdings.inr_balance !== undefined) {
+        const inrStr = (typeof holdings.inr_balance === 'number') ? holdings.inr_balance.toFixed(2) : holdings.inr_balance;
+        if (inrBalEl) inrBalEl.textContent = '₹' + inrStr + ' INR';
+        if (obInrEl) obInrEl.textContent = '₹' + inrStr + ' INR';
       }
       const stEl = document.getElementById('userStakedShares');
       if (stEl && holdings.staked_shares !== undefined) {
@@ -1531,6 +1556,15 @@ function switchActiveWallet(addr) {
   loadActiveWalletUI(addr);
   refreshDashboardData();
   showAlert('Switched active wallet to ' + addr.substring(0, 14) + '...');
+}
+
+async function cancelOrderbookOrder(orderId) {
+  try {
+    const user = getActiveWallet();
+    await postData('/api/v1/orderbook/cancel', { order_id: orderId, user });
+    showAlert('Order cancelled successfully!');
+    refreshDashboardData();
+  } catch (err) { showAlert(err.message, true); }
 }
 
 /* ---------- Live Dynamic Data Refetching ---------- */
@@ -1588,6 +1622,31 @@ async function refreshOrderbookUI() {
         tradesEl.innerHTML = html;
       } else {
         tradesEl.innerHTML = '<h3 style="font-size:0.9rem; color:var(--text-dim); margin-bottom:10px;">Recent Trades</h3><div class="empty-row">No trades executed yet on the orderbook.</div>';
+      }
+    }
+  } catch (err) {}
+
+  try {
+    const activeWallet = getActiveWallet();
+    const res = await fetchData('/api/v1/orderbook/user-orders?address=' + encodeURIComponent(activeWallet));
+    const userOrders = res.orders || res || [];
+    const container = document.getElementById('userOrdersContainer');
+    if (container && Array.isArray(userOrders)) {
+      const openOrders = userOrders.filter(o => o.status === 'open' || o.status === 'partial');
+      if (openOrders.length > 0) {
+        let html = '';
+        openOrders.forEach(o => {
+          const isBuy = o.side === 'buy';
+          const sideColor = isBuy ? 'var(--success)' : 'var(--red)';
+          const priceStr = (typeof o.price === 'number') ? o.price.toFixed(2) : o.price;
+          html += '<div class="list-row"><div class="row-main">' +
+            '<div class="row-title"><span style="color:' + sideColor + '; font-weight:700; text-transform:uppercase;">' + o.side + '</span> ' + o.id + ' <span class="badge badge-active">' + o.status + '</span></div>' +
+            '<div class="row-sub">Price: ₹' + priceStr + ' | Filled: ' + o.filled + '/' + o.amount + ' LQD</div></div>' +
+            '<div class="row-side"><button class="btn btn-sm btn-ghost" onclick="cancelOrderbookOrder(\'' + o.id + '\')">Cancel</button></div></div>';
+        });
+        container.innerHTML = html;
+      } else {
+        container.innerHTML = '<div class="empty-row">No open limit orders for active wallet.</div>';
       }
     }
   } catch (err) {}

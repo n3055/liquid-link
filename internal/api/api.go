@@ -20,6 +20,7 @@ import (
 	"github.com/n3055/liquid-link/internal/config"
 	"github.com/n3055/liquid-link/internal/consensus"
 	"github.com/n3055/liquid-link/internal/crypto"
+	"github.com/n3055/liquid-link/internal/fiat"
 	"github.com/n3055/liquid-link/internal/ledger"
 	"github.com/n3055/liquid-link/internal/orderbook"
 	"github.com/n3055/liquid-link/internal/pcn"
@@ -47,6 +48,7 @@ type Server struct {
 	receiptRegistry receipt.Registry
 	stabilityEng    stability.Engine
 	orderbookEng    orderbook.Engine
+	fiatMgr         fiat.Manager
 }
 
 // NewServer creates a new API Server instance with registered routes and injected dependencies.
@@ -1001,12 +1003,22 @@ func (s *Server) getStabilityEngine() stability.Engine {
 	return s.stabilityEng
 }
 
+func (s *Server) getFiatManager() fiat.Manager {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fiatMgr == nil {
+		s.fiatMgr = fiat.NewManager()
+	}
+	return s.fiatMgr
+}
+
 func (s *Server) getOrderbookEngine() orderbook.Engine {
 	stab := s.getStabilityEngine()
+	fiatM := s.getFiatManager()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.orderbookEng == nil {
-		s.orderbookEng = orderbook.NewEngine(s.assetMgr, stab)
+		s.orderbookEng = orderbook.NewEngine(s.assetMgr, stab, fiatM)
 	}
 	return s.orderbookEng
 }
@@ -1022,15 +1034,18 @@ func (s *Server) handleWalletCreate(w http.ResponseWriter, r *http.Request) {
 
 	addr := newW.Address()
 
-	// Credit initial test balance to new wallet (1000 LQD)
+	// Credit initial test balance to new wallet (1000 LQD & 1000.00 INR)
 	if s.assetMgr != nil {
 		_ = s.assetMgr.Mint(ctx, addr, 1000)
 	}
+	fiatM := s.getFiatManager()
+	_ = fiatM.CreditINR(ctx, addr, 1000.00)
 
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
-		"status":  "created",
-		"address": string(addr),
-		"balance": 1000,
+		"status":      "created",
+		"address":     string(addr),
+		"balance":     1000,
+		"inr_balance": 1000.00,
 	})
 }
 
@@ -1054,6 +1069,14 @@ func (s *Server) handleWalletHoldings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var inrAvailable float64
+	var inrReserved float64
+	fiatM := s.getFiatManager()
+	if acc, err := fiatM.GetAccount(ctx, userAddr); err == nil && acc != nil {
+		inrAvailable = acc.Available
+		inrReserved = acc.Reserved
+	}
+
 	stabEng := s.getStabilityEngine()
 	stakePos, _ := stabEng.GetStakingPosition(ctx, userAddr)
 	bondPos, _ := stabEng.GetBondPosition(ctx, userAddr)
@@ -1073,6 +1096,8 @@ func (s *Server) handleWalletHoldings(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"address":       targetAddr,
 		"balance":       balance,
+		"inr_balance":   inrAvailable,
+		"inr_reserved":  inrReserved,
 		"staked_shares": stakedShares,
 		"accrued_yield": accruedYield,
 		"bonds_held":    bondsHeld,
