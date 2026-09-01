@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/n3055/liquid-link/internal/crypto"
+	"github.com/n3055/liquid-link/internal/fiat"
 	"github.com/n3055/liquid-link/internal/stability"
 	"github.com/n3055/liquid-link/internal/token"
 )
@@ -16,6 +17,7 @@ type engineImpl struct {
 	mu           sync.RWMutex
 	assetMgr     token.AssetManager
 	stabilityEng stability.Engine
+	fiatMgr      fiat.Manager
 	orders       map[string]*Order
 	userOrders   map[crypto.Address][]*Order
 	trades       []*Trade
@@ -24,10 +26,11 @@ type engineImpl struct {
 }
 
 // [Orderbook] NewEngine initializes a new limit orderbook matching engine.
-func NewEngine(assetMgr token.AssetManager, stabilityEng stability.Engine) Engine {
+func NewEngine(assetMgr token.AssetManager, stabilityEng stability.Engine, fiatMgr fiat.Manager) Engine {
 	eng := &engineImpl{
 		assetMgr:     assetMgr,
 		stabilityEng: stabilityEng,
+		fiatMgr:      fiatMgr,
 		orders:       make(map[string]*Order),
 		userOrders:   make(map[crypto.Address][]*Order),
 		trades:       make([]*Trade, 0),
@@ -42,6 +45,15 @@ func NewEngine(assetMgr token.AssetManager, stabilityEng stability.Engine) Engin
 
 func (e *engineImpl) seedInitialLiquidity() {
 	mmUser := crypto.Address("0xmarket_maker_node")
+	ctx := context.Background()
+
+	if e.fiatMgr != nil {
+		_ = e.fiatMgr.CreditINR(ctx, mmUser, 1000000.0)
+	}
+	if e.assetMgr != nil {
+		_ = e.assetMgr.Mint(ctx, mmUser, 1000000)
+	}
+
 	initialOrders := []*Order{
 		{User: mmUser, Side: SideBuy, Price: 0.99, Amount: 10000},
 		{User: mmUser, Side: SideBuy, Price: 0.98, Amount: 15000},
@@ -51,7 +63,6 @@ func (e *engineImpl) seedInitialLiquidity() {
 		{User: mmUser, Side: SideSell, Price: 1.03, Amount: 20000},
 	}
 
-	ctx := context.Background()
 	for _, ord := range initialOrders {
 		_, _, _ = e.PlaceOrder(ctx, ord)
 	}
@@ -66,6 +77,23 @@ func (e *engineImpl) PlaceOrder(ctx context.Context, order *Order) (*Order, []*T
 	}
 	if order.Amount == 0 {
 		return nil, nil, ErrInvalidAmount
+	}
+
+	// Verify balance & escrow reserve before accepting order into orderbook
+	if order.Side == SideBuy {
+		reqINR := order.Price * float64(order.Amount)
+		if e.fiatMgr != nil {
+			if err := e.fiatMgr.ReserveINR(ctx, order.User, reqINR); err != nil {
+				return nil, nil, ErrInsufficientINRBalance
+			}
+		}
+	} else if order.Side == SideSell {
+		if e.assetMgr != nil {
+			bal, err := e.assetMgr.BalanceOf(ctx, order.User)
+			if err == nil && bal < order.Amount {
+				return nil, nil, ErrInsufficientLQDBalance
+			}
+		}
 	}
 
 	e.idCounter++
@@ -129,6 +157,8 @@ func (e *engineImpl) matchBuyOrder(ctx context.Context, buyOrd *Order) []*Trade 
 
 		// Execute trade at seller's (maker) price
 		execPrice := sellOrd.Price
+		execINR := execPrice * float64(matchQty)
+		buyerReservedDeduction := buyOrd.Price * float64(matchQty)
 
 		// Execute asset manager settlement if available
 		if e.assetMgr != nil {
@@ -142,6 +172,11 @@ func (e *engineImpl) matchBuyOrder(ctx context.Context, buyOrd *Order) []*Trade 
 				_ = e.assetMgr.Credit(ctx, sellOrd.User, matchQty)
 				continue
 			}
+		}
+
+		// Settle fiat INR transfer between buyer reserved escrow and seller available account
+		if e.fiatMgr != nil {
+			_ = e.fiatMgr.TransferINR(ctx, buyOrd.User, sellOrd.User, execINR, buyerReservedDeduction)
 		}
 
 		buyOrd.Filled += matchQty
@@ -220,6 +255,8 @@ func (e *engineImpl) matchSellOrder(ctx context.Context, sellOrd *Order) []*Trad
 
 		// Execute trade at buyer's (maker) price
 		execPrice := buyOrd.Price
+		execINR := execPrice * float64(matchQty)
+		buyerReservedDeduction := buyOrd.Price * float64(matchQty)
 
 		if e.assetMgr != nil {
 			if err := e.assetMgr.Debit(ctx, sellOrd.User, matchQty); err != nil {
@@ -232,6 +269,11 @@ func (e *engineImpl) matchSellOrder(ctx context.Context, sellOrd *Order) []*Trad
 				_ = e.assetMgr.Credit(ctx, sellOrd.User, matchQty)
 				continue
 			}
+		}
+
+		// Settle fiat INR transfer between buyer reserved escrow and seller available account
+		if e.fiatMgr != nil {
+			_ = e.fiatMgr.TransferINR(ctx, buyOrd.User, sellOrd.User, execINR, buyerReservedDeduction)
 		}
 
 		sellOrd.Filled += matchQty
@@ -286,6 +328,15 @@ func (e *engineImpl) CancelOrder(ctx context.Context, orderID string, user crypt
 	}
 	if ord.Status == StatusFilled || ord.Status == StatusCancelled {
 		return ErrOrderCompleted
+	}
+
+	// Unlock remaining reserved INR for unfilled buy orders
+	if ord.Side == SideBuy && e.fiatMgr != nil {
+		unfilledQty := ord.Amount - ord.Filled
+		if unfilledQty > 0 {
+			unfilledINR := ord.Price * float64(unfilledQty)
+			_ = e.fiatMgr.ReleaseINR(ctx, user, unfilledINR)
+		}
 	}
 
 	ord.Status = StatusCancelled

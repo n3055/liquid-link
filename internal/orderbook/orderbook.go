@@ -10,11 +10,13 @@ import (
 )
 
 var (
-	ErrInvalidPrice   = errors.New("price must be greater than zero")
-	ErrInvalidAmount  = errors.New("amount must be greater than zero")
-	ErrOrderNotFound  = errors.New("order not found")
-	ErrUnauthorized   = errors.New("unauthorized order modification")
-	ErrOrderCompleted = errors.New("order is already filled or cancelled")
+	ErrInvalidPrice           = errors.New("price must be greater than zero")
+	ErrInvalidAmount          = errors.New("amount must be greater than zero")
+	ErrOrderNotFound          = errors.New("order not found")
+	ErrUnauthorized           = errors.New("unauthorized order modification")
+	ErrOrderCompleted         = errors.New("order is already filled or cancelled")
+	ErrInsufficientINRBalance = errors.New("insufficient available INR balance to place buy order")
+	ErrInsufficientLQDBalance = errors.New("insufficient LQD token balance to place sell order")
 )
 
 // OrderSide specifies whether an order is buying or selling tokens.

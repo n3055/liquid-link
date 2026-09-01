@@ -409,6 +409,13 @@ func TestOrderbookEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 OK for orderbook depth, got %d: %s", rr.Code, rr.Body.String())
 	}
 
+	// 1b. Mint LQD tokens to seller so seller has balance to place sell order
+	mintPayload := []byte(`{"address":"0xseller_addr","amount":100}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/wallet/mint", bytes.NewBuffer(mintPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
 	// 2. Place a limit sell order
 	sellPayload := []byte(`{"user":"0xseller_addr","side":"sell","price":1.05,"amount":100}`)
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/orderbook/order", bytes.NewBuffer(sellPayload))

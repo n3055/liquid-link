@@ -5,12 +5,14 @@ import (
 	"testing"
 
 	"github.com/n3055/liquid-link/internal/crypto"
+	"github.com/n3055/liquid-link/internal/fiat"
 	"github.com/n3055/liquid-link/internal/orderbook"
 )
 
 func TestOrderbook_PlaceAndMatch(t *testing.T) {
 	ctx := context.Background()
-	eng := orderbook.NewEngine(nil, nil)
+	fiatMgr := fiat.NewManager()
+	eng := orderbook.NewEngine(nil, nil, fiatMgr)
 
 	buyer := crypto.Address("0xbuyer123")
 	seller := crypto.Address("0xseller123")
@@ -61,7 +63,8 @@ func TestOrderbook_PlaceAndMatch(t *testing.T) {
 
 func TestOrderbook_DepthAndCancel(t *testing.T) {
 	ctx := context.Background()
-	eng := orderbook.NewEngine(nil, nil)
+	fiatMgr := fiat.NewManager()
+	eng := orderbook.NewEngine(nil, nil, fiatMgr)
 
 	user := crypto.Address("0xuser456")
 
@@ -101,7 +104,8 @@ func TestOrderbook_DepthAndCancel(t *testing.T) {
 func TestOrderbook_UnbackedOrderDebitFailure(t *testing.T) {
 	ctx := context.Background()
 	// Mock asset manager where debit fails due to zero balance
-	eng := orderbook.NewEngine(nil, nil)
+	fiatMgr := fiat.NewManager()
+	eng := orderbook.NewEngine(nil, nil, fiatMgr)
 
 	seller := crypto.Address("0xzero_balance_seller")
 	buyer := crypto.Address("0xbuyer_test")
