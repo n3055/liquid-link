@@ -132,8 +132,16 @@ func (e *engineImpl) matchBuyOrder(ctx context.Context, buyOrd *Order) []*Trade 
 
 		// Execute asset manager settlement if available
 		if e.assetMgr != nil {
-			_ = e.assetMgr.Debit(ctx, sellOrd.User, matchQty)
-			_ = e.assetMgr.Credit(ctx, buyOrd.User, matchQty)
+			if err := e.assetMgr.Debit(ctx, sellOrd.User, matchQty); err != nil {
+				// Seller has insufficient token balance; cancel/skip unbacked sell order
+				sellOrd.Status = StatusCancelled
+				continue
+			}
+			if err := e.assetMgr.Credit(ctx, buyOrd.User, matchQty); err != nil {
+				// Rollback debit on credit failure
+				_ = e.assetMgr.Credit(ctx, sellOrd.User, matchQty)
+				continue
+			}
 		}
 
 		buyOrd.Filled += matchQty
@@ -214,8 +222,16 @@ func (e *engineImpl) matchSellOrder(ctx context.Context, sellOrd *Order) []*Trad
 		execPrice := buyOrd.Price
 
 		if e.assetMgr != nil {
-			_ = e.assetMgr.Debit(ctx, sellOrd.User, matchQty)
-			_ = e.assetMgr.Credit(ctx, buyOrd.User, matchQty)
+			if err := e.assetMgr.Debit(ctx, sellOrd.User, matchQty); err != nil {
+				// Seller has insufficient token balance; cancel/skip unbacked sell order
+				sellOrd.Status = StatusCancelled
+				continue
+			}
+			if err := e.assetMgr.Credit(ctx, buyOrd.User, matchQty); err != nil {
+				// Rollback debit on credit failure
+				_ = e.assetMgr.Credit(ctx, sellOrd.User, matchQty)
+				continue
+			}
 		}
 
 		sellOrd.Filled += matchQty

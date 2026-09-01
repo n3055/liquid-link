@@ -87,7 +87,14 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 
 	// Extract key pair for signer and consensus validator registration
 	pubKey := w.ExportPublicKey()
-	signer, err := crypto.NewSigner(crypto.PrivateKey(w.(interface{ ExportPrivateKey() []byte }).ExportPrivateKey()))
+
+	keyExporter, ok := w.(interface{ ExportPrivateKey() []byte })
+	if !ok {
+		return nil, fmt.Errorf("node wallet does not support private key export")
+	}
+	privKeyBytes := keyExporter.ExportPrivateKey()
+
+	signer, err := crypto.NewSigner(crypto.PrivateKey(privKeyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize signer: %w", err)
 	}
@@ -102,7 +109,7 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 
 	// 5. Blockchain & Consensus
 	blockRepo := blockchain.NewRepository(store)
-	privKey := crypto.PrivateKey(w.(interface{ ExportPrivateKey() []byte }).ExportPrivateKey())
+	privKey := crypto.PrivateKey(privKeyBytes)
 	validators := map[string]crypto.PublicKey{
 		cfg.Node.ID: pubKey,
 	}

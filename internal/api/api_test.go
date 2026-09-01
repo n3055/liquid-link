@@ -176,6 +176,16 @@ func TestWalletEndpoints(t *testing.T) {
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("expected 202 Accepted for transfer, got %d", rr.Code)
 	}
+
+	// 5. Credit Sync
+	creditSyncPayload := []byte(`{"address":"receiver-sync","amount":300}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/wallet/credit-sync", bytes.NewBuffer(creditSyncPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for credit sync, got %d", rr.Code)
+	}
 }
 
 func TestStateChannelEndpoints(t *testing.T) {

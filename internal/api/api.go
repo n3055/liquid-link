@@ -110,6 +110,7 @@ func (s *Server) setupRoutes() {
 			wr.Post("/create", s.handleWalletCreate)
 			wr.Post("/transfer", s.handleTransfer)
 			wr.Post("/mint", s.handleMint)
+			wr.Post("/credit-sync", s.handleCreditSync)
 		})
 
 		// Orderbook actions
@@ -363,7 +364,7 @@ func (s *Server) syncPeerCredit(addr crypto.Address, amount token.Amount) {
 
 	client := &http.Client{Timeout: 2 * time.Second}
 	for ep := range endpoints {
-		url := fmt.Sprintf("%s/api/v1/wallet/mint", strings.TrimSuffix(ep, "/"))
+		url := fmt.Sprintf("%s/api/v1/wallet/credit-sync", strings.TrimSuffix(ep, "/"))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(payload))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/json")
@@ -373,6 +374,39 @@ func (s *Server) syncPeerCredit(addr crypto.Address, amount token.Amount) {
 			}
 		}
 	}
+}
+
+func (s *Server) handleCreditSync(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req mintReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Address == "" || req.Amount == 0 {
+		respondError(w, http.StatusBadRequest, "address and positive amount required")
+		return
+	}
+
+	if s.assetMgr == nil {
+		respondError(w, http.StatusInternalServerError, "asset manager uninitialized")
+		return
+	}
+
+	if err := s.assetMgr.Credit(ctx, crypto.Address(req.Address), req.Amount); err != nil {
+		respondError(w, http.StatusInternalServerError, "credit sync failed: "+err.Error())
+		return
+	}
+
+	newBal, _ := s.assetMgr.BalanceOf(ctx, crypto.Address(req.Address))
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":      "credited",
+		"address":     req.Address,
+		"amount":      req.Amount,
+		"new_balance": newBal,
+	})
 }
 
 type mintReq struct {
