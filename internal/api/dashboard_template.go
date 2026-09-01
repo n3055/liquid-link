@@ -1339,11 +1339,24 @@ function generateAvatarSVG(address, size) {
 }
 
 async function createNewWalletUI() {
+  const currentWallet = localStorage.getItem('liquidlink_active_wallet');
+  if (currentWallet) {
+    const confirmReplace = confirm(
+      'A wallet session already exists in browser storage:\n' +
+      currentWallet + '\n\n' +
+      'Creating a new wallet will delete/reset your current active wallet session. Do you want to delete it and create a new wallet?'
+    );
+    if (!confirmReplace) {
+      return;
+    }
+  }
+
   try {
     const res = await postData('/api/v1/wallet/create', {});
-    saveKnownWallet(res.address);
-    loadActiveWalletUI(res.address);
-    showAlert('New wallet generated! Address: ' + res.address.substring(0, 16) + '... (1000 LQD balance credited)');
+    localStorage.setItem('liquidlink_active_wallet', res.address);
+    localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
+    await loadActiveWalletUI(res.address);
+    showAlert('Active wallet reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD balance credited)');
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }

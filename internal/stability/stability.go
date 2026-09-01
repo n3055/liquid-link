@@ -3,6 +3,7 @@ package stability
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/n3055/liquid-link/internal/crypto"
 	"github.com/n3055/liquid-link/internal/token"
@@ -89,4 +90,7 @@ type Engine interface {
 
 	// ProcessEpoch executes periodic seigniorage rebalancing and yield distribution.
 	ProcessEpoch(ctx context.Context) error
+
+	// StartBackgroundWorker launches periodic algorithmic seigniorage rebalancing.
+	StartBackgroundWorker(ctx context.Context, interval time.Duration)
 }

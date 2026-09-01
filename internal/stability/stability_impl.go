@@ -256,6 +256,15 @@ func (e *engineImpl) ProcessEpoch(ctx context.Context) error {
 	delta := (rand.Float64() - 0.48) * 0.03
 	e.currentPrice = math.Round((e.currentPrice+delta)*100) / 100
 
+	// Algorithmic Seigniorage Expansion / Contraction
+	if e.currentPrice > 1.005 {
+		// Expansion: Algorithmic minting to satisfy demand & distribute yield
+		expansionAmount := token.Amount(math.Round((e.currentPrice - 1.00) * 10000))
+		if e.assetMgr != nil && expansionAmount > 0 {
+			_ = e.assetMgr.Mint(ctx, crypto.Address("0xseigniorage_treasury"), expansionAmount)
+		}
+	}
+
 	// Add to price history
 	e.priceHistory = append(e.priceHistory, PricePoint{
 		Timestamp: time.Now().Unix(),
@@ -267,6 +276,21 @@ func (e *engineImpl) ProcessEpoch(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (e *engineImpl) StartBackgroundWorker(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				_ = e.ProcessEpoch(ctx)
+			}
+		}
+	}()
 }
 
 func (e *engineImpl) determineState(price float64) PegState {
