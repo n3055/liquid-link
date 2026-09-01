@@ -782,9 +782,10 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       <label for="chanIdSettle">Channel ID</label>
       <input type="text" id="chanIdSettle" placeholder="chan-..." required>
     </div>
-    <div class="btn-row">
-      <button class="btn btn-secondary" onclick="submitSettleChannel('initiate')">Initiate</button>
-      <button class="btn" onclick="submitSettleChannel('finalize')">Finalize</button>
+    <div class="btn-row" style="flex-wrap:wrap; gap:8px;">
+      <button class="btn btn-secondary" onclick="submitSettleChannel('initiate')" style="flex:1;">Initiate</button>
+      <button class="btn btn-secondary" onclick="submitChallengeChannel()" style="flex:1;">Challenge (S+1)</button>
+      <button class="btn" onclick="submitSettleChannel('finalize')" style="flex:1;">Finalize</button>
     </div>
   </div>
 </div></div>
@@ -1203,6 +1204,16 @@ async function submitSettleChannel(action) {
     if (!channel_id) { showAlert('Channel ID is required', true); return; }
     await postData('/api/v1/channels/settle', { channel_id, action });
     showAlert('Settlement ' + action + ' executed');
+    setTimeout(() => location.reload(), 1000);
+  } catch (err) { showAlert(err.message, true); }
+}
+
+async function submitChallengeChannel() {
+  try {
+    const channel_id = document.getElementById('chanIdSettle').value.trim();
+    if (!channel_id) { showAlert('Channel ID is required', true); return; }
+    await postData('/api/v1/channels/challenge', { channel_id });
+    showAlert('Dispute challenged with higher sequence co-signature!');
     setTimeout(() => location.reload(), 1000);
   } catch (err) { showAlert(err.message, true); }
 }

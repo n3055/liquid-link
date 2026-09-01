@@ -146,6 +146,7 @@ func (s *Server) setupRoutes() {
 			cr.Post("/open", s.handleOpenChannel)
 			cr.Post("/update", s.handleUpdateChannel)
 			cr.Post("/settle", s.handleSettleChannel)
+			cr.Post("/challenge", s.handleChallengeChannel)
 		})
 
 		// Bridge / Settlement actions
@@ -688,6 +689,52 @@ func (s *Server) handleSettleChannel(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "settlement_updated",
 		"channel": ch,
+	})
+}
+
+type challengeChannelReq struct {
+	ChannelID string `json:"channel_id"`
+	Sequence  uint64 `json:"sequence"`
+}
+
+func (s *Server) handleChallengeChannel(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req challengeChannelReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.ChannelID == "" {
+		respondError(w, http.StatusBadRequest, "channel_id required")
+		return
+	}
+
+	if s.pcn == nil || s.pcnRegistry == nil {
+		respondError(w, http.StatusInternalServerError, "pcn uninitialized")
+		return
+	}
+
+	ch, err := s.pcnRegistry.GetChannel(ctx, req.ChannelID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "channel not found")
+		return
+	}
+
+	higherSeq := *ch
+	higherSeq.Sequence = req.Sequence
+	if higherSeq.Sequence <= ch.Sequence {
+		higherSeq.Sequence = ch.Sequence + 1
+	}
+
+	if err := s.pcn.ChallengeSettlement(ctx, req.ChannelID, &higherSeq); err != nil {
+		respondError(w, http.StatusBadRequest, "challenge failed: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "dispute_challenged",
+		"channel": higherSeq,
 	})
 }
 
