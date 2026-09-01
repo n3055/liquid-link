@@ -34,7 +34,7 @@ func main() {
 		genCmd := flag.NewFlagSet("wallet-gen", flag.ExitOnError)
 		aliasFlag := genCmd.String("alias", "", "Alias to save the generated wallet under (optional)")
 		dirFlag := genCmd.String("dir", "", "Directory to save the wallet (default: ~/.liquid-link/wallets)")
-		
+
 		if err := genCmd.Parse(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing flags: %v\n", err)
 			os.Exit(1)

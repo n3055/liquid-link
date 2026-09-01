@@ -70,7 +70,7 @@ func TestSignTransaction(t *testing.T) {
 	// Verify the signature using the verifier
 	verifier := crypto.NewVerifier()
 	payload := SerializeTx(tx)
-	
+
 	// Wait, we signed the hash of the payload in localWallet.SignTransaction:
 	// hash := sha256.Sum256(payload)
 	// signer.Sign(hash[:])

@@ -57,7 +57,7 @@ func TestBlockchainGenesisAndAppends(t *testing.T) {
 
 	// 3. Create a valid Genesis block (Index 0, PrevHash is GenesisPrevHash)
 	genesis := block.NewBlock(0, GenesisPrevHash, nil, proposerID)
-	
+
 	// Proposer signs it
 	signer, err := crypto.NewSigner(kp.PrivateKey)
 	if err != nil {
@@ -90,7 +90,7 @@ func TestBlockchainGenesisAndAppends(t *testing.T) {
 	block1 := block.NewBlock(1, genesis.Hash, []*transaction.Transaction{
 		{ID: "tx1", Sender: "0x1", Receiver: "0x2", Amount: 50, Nonce: 1, Timestamp: time.Now()},
 	}, proposerID)
-	
+
 	// Proposer signs block1
 	sigHash1 := block1.SigningHash()
 	sig1, err := signer.Sign(sigHash1[:])

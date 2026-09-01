@@ -22,6 +22,12 @@ build:
 run: build
 	./$(NODE_BINARY) --config configs/config.yaml
 
+run-a: build
+	./$(NODE_BINARY) --config configs/node_a.yaml
+
+run-b: build
+	./$(NODE_BINARY) --config configs/node_b.yaml
+
 test:
 	$(GOTEST) -v -race ./...
 

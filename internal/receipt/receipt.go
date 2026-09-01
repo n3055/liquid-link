@@ -20,10 +20,10 @@ type Receipt struct {
 
 // UTRMapping connects a Unique Transaction Reference (bank transfer ID) to local transactions.
 type UTRMapping struct {
-	UTR            string         `json:"utr"`
-	TransactionID  string         `json:"transaction_id"`
-	Status         string         `json:"status"` // e.g. "pending", "linked", "settled"
-	CreatedAt      time.Time      `json:"created_at"`
+	UTR           string    `json:"utr"`
+	TransactionID string    `json:"transaction_id"`
+	Status        string    `json:"status"` // e.g. "pending", "linked", "settled"
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // Registry stores and validates receipts and maps them to UTRs.
@@ -39,6 +39,9 @@ type Registry interface {
 
 	// GetUTRMapping retrieves the mapping details for a given UTR.
 	GetUTRMapping(ctx context.Context, utr string) (*UTRMapping, error)
+
+	// ListUTRMapping returns all UTR mappings.
+	ListUTRMapping(ctx context.Context) ([]*UTRMapping, error)
 }
 
 // Bridge represents the crypto-to-fiat gateway orchestrator.

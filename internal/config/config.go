@@ -59,9 +59,9 @@ type BluetoothConfig struct {
 
 // PCNConfig configures payment channel network options.
 type PCNConfig struct {
-	ChannelReserve     float64 `yaml:"channel_reserve"`
-	RoutingFeeFlat     int64   `yaml:"routing_fee_flat"`
-	RoutingFeePercent  float64 `yaml:"routing_fee_percent"`
+	ChannelReserve    float64 `yaml:"channel_reserve"`
+	RoutingFeeFlat    int64   `yaml:"routing_fee_flat"`
+	RoutingFeePercent float64 `yaml:"routing_fee_percent"`
 }
 
 // Load reads and parses configuration from a YAML file.
