@@ -449,7 +449,10 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
         <!-- Place Order Form -->
         <div style="background:var(--surface-2); border-radius:12px; padding:16px; border:1px solid var(--border);">
-          <h3 style="font-size:0.95rem; margin-bottom:12px; color:var(--text);">Place Limit Order</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="font-size:0.95rem; color:var(--text); margin:0;">Place Limit Order</h3>
+            <span style="font-size:0.78rem; color:var(--text-dim);">Available: <strong id="obAvailableINR" style="color:var(--success);">₹{{ printf "%.2f" .INRBalance }} INR</strong></span>
+          </div>
           <form onsubmit="submitOrderbookOrder(event)">
             <div class="field">
               <label>Order Type</label>
@@ -1375,9 +1378,9 @@ async function createNewWalletUI() {
     const res = await postData('/api/v1/wallet/create', {});
     localStorage.setItem('liquidlink_active_wallet', res.address);
     localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
-    await loadActiveWalletUI(res.address, res.balance || 1000);
+    await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
     refreshDashboardData();
-    showAlert('Active wallet session reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD balance credited)');
+    showAlert('Active wallet session reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD & ₹1000.00 INR credited)');
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -1473,7 +1476,7 @@ function saveKnownWallet(addr) {
   }
 }
 
-async function loadActiveWalletUI(targetAddr, initialBalance) {
+async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance) {
   const addr = targetAddr || getActiveWallet();
   localStorage.setItem('liquidlink_active_wallet', addr);
   saveKnownWallet(addr);
@@ -1484,6 +1487,14 @@ async function loadActiveWalletUI(targetAddr, initialBalance) {
   const heroBalEl = document.getElementById('heroTotalBalance');
   if (heroBalEl && initialBalance !== undefined) {
     heroBalEl.innerHTML = initialBalance + '<small>LQD</small>';
+  }
+
+  const inrBalEl = document.getElementById('heroINRBalance');
+  const obInrEl = document.getElementById('obAvailableINR');
+  if (initialINRBalance !== undefined) {
+    const inrStr = (typeof initialINRBalance === 'number') ? initialINRBalance.toFixed(2) : initialINRBalance;
+    if (inrBalEl) inrBalEl.textContent = '₹' + inrStr + ' INR';
+    if (obInrEl) obInrEl.textContent = '₹' + inrStr + ' INR';
   }
 
   const topbarBtn = document.getElementById('topbarAvatarBtn');
@@ -1501,10 +1512,10 @@ async function loadActiveWalletUI(targetAddr, initialBalance) {
       if (holdings.balance !== undefined && heroBalEl) {
         heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
       }
-      const inrBalEl = document.getElementById('heroINRBalance');
-      if (holdings.inr_balance !== undefined && inrBalEl) {
+      if (holdings.inr_balance !== undefined) {
         const inrStr = (typeof holdings.inr_balance === 'number') ? holdings.inr_balance.toFixed(2) : holdings.inr_balance;
-        inrBalEl.textContent = '₹' + inrStr + ' INR';
+        if (inrBalEl) inrBalEl.textContent = '₹' + inrStr + ' INR';
+        if (obInrEl) obInrEl.textContent = '₹' + inrStr + ' INR';
       }
       const stEl = document.getElementById('userStakedShares');
       if (stEl && holdings.staked_shares !== undefined) {

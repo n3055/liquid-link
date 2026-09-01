@@ -9,7 +9,7 @@ import (
 
 const (
 	// DefaultInitialINRBalance represents initial simulated fiat credit assigned to new user wallets.
-	DefaultInitialINRBalance = 10000.00
+	DefaultInitialINRBalance = 1000.00
 )
 
 type managerImpl struct {

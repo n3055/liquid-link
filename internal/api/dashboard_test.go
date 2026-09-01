@@ -66,6 +66,9 @@ func TestDashboardRendering(t *testing.T) {
 			if !strings.Contains(body, "userOrdersContainer") {
 				t.Errorf("expected userOrdersContainer element ID in dashboard body for %s", path)
 			}
+			if !strings.Contains(body, "obAvailableINR") {
+				t.Errorf("expected obAvailableINR element ID in dashboard body for %s", path)
+			}
 		})
 	}
 }

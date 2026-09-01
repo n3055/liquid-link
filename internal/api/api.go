@@ -1034,15 +1034,18 @@ func (s *Server) handleWalletCreate(w http.ResponseWriter, r *http.Request) {
 
 	addr := newW.Address()
 
-	// Credit initial test balance to new wallet (1000 LQD)
+	// Credit initial test balance to new wallet (1000 LQD & 1000.00 INR)
 	if s.assetMgr != nil {
 		_ = s.assetMgr.Mint(ctx, addr, 1000)
 	}
+	fiatM := s.getFiatManager()
+	_ = fiatM.CreditINR(ctx, addr, 1000.00)
 
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
-		"status":  "created",
-		"address": string(addr),
-		"balance": 1000,
+		"status":      "created",
+		"address":     string(addr),
+		"balance":     1000,
+		"inr_balance": 1000.00,
 	})
 }
 
