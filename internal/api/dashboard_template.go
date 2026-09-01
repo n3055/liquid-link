@@ -63,7 +63,7 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
-  padding-bottom: calc(var(--nav-h) + 24px);
+  padding-bottom: calc(var(--nav-h) + 60px);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -314,11 +314,116 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .nav-btn.scan { color: #fff; }
 .nav-scan-circle { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); border: 1px solid var(--accent-dim); display: flex; align-items: center; justify-content: center; margin-top: -22px; }
 @media (min-width: 720px) { .bottom-nav { display: none; } body { padding-bottom: 24px; } }
+
+/* ---------- Welcome Overlay & Onboarding ---------- */
+.welcome-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(8, 9, 13, 0.94);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.welcome-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; width: 100%; max-width: 440px; padding: 32px 24px;
+  text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  animation: welcomePop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes welcomePop { from { opacity: 0; transform: scale(0.92) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.welcome-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+.welcome-logo { margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; }
+.welcome-title { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; margin: 0 0 8px; color: var(--text); }
+.welcome-sub { font-size: 0.85rem; color: var(--text-dim); margin: 0 0 20px; line-height: 1.45; }
+.welcome-features { display: flex; flex-direction: column; gap: 10px; text-align: left; margin-bottom: 24px; background: var(--surface-2); padding: 14px; border-radius: 12px; border: 1px solid var(--border-soft); }
+.feat-item { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; color: var(--text); }
+.feat-icon { font-size: 1rem; width: 24px; text-align: center; }
+
+/* ---------- Celebration Modal & Confetti ---------- */
+.celebration-overlay {
+  position: fixed; inset: 0; z-index: 110;
+  background: rgba(8, 9, 13, 0.92);
+  backdrop-filter: blur(20px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.celebration-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 24px; width: 100%; max-width: 400px; padding: 28px 24px;
+  text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,0.7); position: relative; z-index: 2;
+  animation: celPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes celPop { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+.celebration-icon { font-size: 3rem; margin-bottom: 8px; }
+.cel-avatar { width: 64px; height: 64px; border-radius: 50%; margin: 12px auto; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid var(--accent); }
+.cel-address { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); background: var(--surface-2); padding: 6px 12px; border-radius: 20px; word-break: break-all; margin-bottom: 16px; border: 1px solid var(--border-soft); }
+.cel-balance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.cel-bal-card { background: var(--surface-2); padding: 10px; border-radius: 10px; border: 1px solid var(--border-soft); }
+.cel-bal-card .k { font-size: 0.72rem; color: var(--text-dim); }
+.cel-bal-card .v { font-size: 0.95rem; font-weight: 700; margin-top: 2px; }
+
+.confetti-container { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.confetti-particle { position: absolute; top: -10px; width: 8px; height: 8px; border-radius: 2px; opacity: 0.8; animation: confettiFall linear infinite; }
+@keyframes confettiFall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
 </style>
 </head>
 <body>
 
 <div id="alertBox"></div>
+
+<!-- Welcome Screen Overlay (MetaMask-style Onboarding) -->
+<div class="welcome-overlay" id="welcomeOverlay" style="display:none;">
+  <div class="welcome-card">
+    <div class="welcome-badge">LiquidLink Web3</div>
+    <div class="welcome-logo">
+      <svg width="64" height="64" viewBox="0 0 40 40" fill="none">
+        <rect width="40" height="40" rx="12" fill="url(#welcGrad)"/>
+        <path d="M12 28L20 12L28 28H23L20 22L17 28H12Z" fill="white"/>
+        <circle cx="20" cy="18" r="3" fill="#6d9bee"/>
+        <defs><linearGradient id="welcGrad" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#4F6EF7"/><stop offset="1" stop-color="#1E2B7A"/></linearGradient></defs>
+      </svg>
+    </div>
+    <h1 class="welcome-title">Welcome to LiquidLink</h1>
+    <p class="welcome-sub">Decentralized Peer-to-Peer Settlement & Seigniorage Liquidity Protocol</p>
+
+    <div class="welcome-features">
+      <div class="feat-item"><span class="feat-icon">⚡</span><span>Instant P2P State Channel Payments</span></div>
+      <div class="feat-item"><span class="feat-icon">🛡️</span><span>Algorithmic Seigniorage INR Peg Stability</span></div>
+      <div class="feat-item"><span class="feat-icon">📈</span><span>Real-Time Limit Orderbook Exchange</span></div>
+    </div>
+
+    <div class="welcome-actions">
+      <button class="btn btn-lg btn-primary" onclick="createNewWalletFromWelcome()" style="width:100%;">Create New Wallet</button>
+      <button class="btn btn-ghost" onclick="closeWelcomeOverlay()" style="width:100%; margin-top:8px;">Explore Node Default Wallet</button>
+    </div>
+  </div>
+</div>
+
+<!-- Celebration Animation Modal -->
+<div class="celebration-overlay" id="celebrationModal" style="display:none;">
+  <div class="confetti-container" id="confettiContainer"></div>
+  <div class="celebration-card">
+    <div class="celebration-icon">🥳</div>
+    <h2 style="margin:0 0 4px; font-size:1.4rem;">Wallet Created!</h2>
+    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:14px;">Your new Web3 wallet session is active and funded on LiquidLink testnet.</p>
+    
+    <div class="cel-avatar" id="celAvatar"></div>
+    <div class="cel-address" id="celAddressText"></div>
+
+    <div class="cel-balance-grid">
+      <div class="cel-bal-card">
+        <div class="k">Starting LQD</div>
+        <div class="v" id="celLqdVal">1000 LQD</div>
+      </div>
+      <div class="cel-bal-card">
+        <div class="k">Starting Fiat</div>
+        <div class="v" id="celInrVal" style="color:var(--success);">₹1,000.00 INR</div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="dismissCelebrationModal()" style="width:100%; margin-top:16px;">Launch Dashboard 🚀</button>
+  </div>
+</div>
 
 <!-- Top bar -->
 <header class="topbar">
@@ -411,6 +516,12 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
     <div class="section-card">
       <div class="section-head">
         <h2>LQD / INR Orderbook <span class="count" id="obClearingPrice">Clearing Price: ₹{{ if .StabilityStatus }}{{ printf "%.2f" .StabilityStatus.Price }}{{ else }}1.00{{ end }} INR</span></h2>
+      </div>
+
+      <!-- Price History Chart -->
+      <div style="background:var(--surface-2); border-radius:12px; padding:16px; margin:16px 16px 0; border:1px solid var(--border);">
+        <h3 style="font-size:0.95rem; margin-bottom:12px; color:var(--text);">LQD / INR Exchange Rate & Peg Stability (Price Over Time)</h3>
+        <div id="priceChartWrap" style="position:relative; width:100%; height:180px;"></div>
       </div>
 
       <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px; padding:16px;">
@@ -508,6 +619,19 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
     <div class="section-card">
       <div class="section-head">
         <h2>Seigniorage Peg & Holdings <span class="badge {{ if eq (printf "%v" .StabilityStatus.State) "expansion" }}badge-active{{ else }}badge-pending{{ end }}" id="stabilityStateBadge">{{ .StabilityStatus.State }}</span></h2>
+      </div>
+
+      <!-- Monetary Metrics Multi-Line Chart -->
+      <div style="background:var(--surface-2); border-radius:12px; padding:16px; margin:16px 16px 0; border:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+          <h3 style="font-size:0.95rem; color:var(--text); margin:0;">Protocol Monetary Mechanics (Supply, Shares & Bonds Over Time)</h3>
+          <div style="display:flex; gap:12px; font-size:0.75rem;">
+            <span style="color:#4d84e2;">● Total Supply</span>
+            <span style="color:#b98f45;">● Staked Shares</span>
+            <span style="color:#c96a6a;">● Bonds Held</span>
+          </div>
+        </div>
+        <div id="metricsChartWrap" style="position:relative; width:100%; height:180px;"></div>
       </div>
 
       <div style="padding:16px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; border-bottom:1px solid var(--border);">
@@ -1380,7 +1504,7 @@ async function createNewWalletUI() {
     localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
     await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
     refreshDashboardData();
-    showAlert('Active wallet session reset. New wallet active: ' + res.address.substring(0, 16) + '... (1000 LQD & ₹1000.00 INR credited)');
+    celebrateWalletCreation(res.address, res.balance || 1000, res.inr_balance || 1000);
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -1453,6 +1577,179 @@ async function submitRedeemBonds() {
     showAlert('Successfully redeemed ' + amount + ' bonds + bonus payout!');
     refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
+}
+
+/* ---------- Onboarding Welcome & Celebration Modal ---------- */
+function checkFirstTimeWelcome() {
+  const active = localStorage.getItem('liquidlink_active_wallet');
+  if (!active) {
+    const welcome = document.getElementById('welcomeOverlay');
+    if (welcome) welcome.style.display = 'flex';
+  }
+}
+
+function closeWelcomeOverlay() {
+  const welcome = document.getElementById('welcomeOverlay');
+  if (welcome) welcome.style.display = 'none';
+}
+
+async function createNewWalletFromWelcome() {
+  closeWelcomeOverlay();
+  try {
+    const res = await postData('/api/v1/wallet/create', {});
+    localStorage.setItem('liquidlink_active_wallet', res.address);
+    localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
+    await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
+    refreshDashboardData();
+    celebrateWalletCreation(res.address, res.balance || 1000, res.inr_balance || 1000);
+  } catch (err) {
+    showAlert('Failed to create wallet: ' + err.message, true);
+  }
+}
+
+function celebrateWalletCreation(address, lqdBal, inrBal) {
+  const modal = document.getElementById('celebrationModal');
+  if (!modal) return;
+
+  const addrEl = document.getElementById('celAddressText');
+  if (addrEl) addrEl.textContent = address;
+
+  const avEl = document.getElementById('celAvatar');
+  if (avEl) avEl.innerHTML = generateAvatarSVG(address, 64);
+
+  const lqdEl = document.getElementById('celLqdVal');
+  if (lqdEl) lqdEl.textContent = (lqdBal || 1000) + ' LQD';
+
+  const inrEl = document.getElementById('celInrVal');
+  if (inrEl) inrEl.textContent = '₹' + ((inrBal || 1000).toFixed(2)) + ' INR';
+
+  modal.style.display = 'flex';
+
+  const container = document.getElementById('confettiContainer');
+  if (container) {
+    container.innerHTML = '';
+    const colors = ['#4F6EF7', '#45a374', '#b98f45', '#6d9bee', '#e85d04', '#9d4edd'];
+    for (let i = 0; i < 40; i++) {
+      const p = document.createElement('div');
+      p.className = 'confetti-particle';
+      p.style.left = Math.random() * 100 + '%';
+      p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+      p.style.animationDelay = (Math.random() * 0.8) + 's';
+      p.style.animationDuration = (1.5 + Math.random() * 1.5) + 's';
+      container.appendChild(p);
+    }
+  }
+}
+
+function dismissCelebrationModal() {
+  const modal = document.getElementById('celebrationModal');
+  if (modal) modal.style.display = 'none';
+}
+
+/* ---------- Standalone Interactive SVG Line Charts ---------- */
+function renderPriceChart(history) {
+  const container = document.getElementById('priceChartWrap');
+  if (!container) return;
+
+  if (!history || history.length === 0) {
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:0.85rem;">Collecting historical price points...</div>';
+    return;
+  }
+
+  const width = container.clientWidth || 500;
+  const height = 180;
+  const padding = { top: 20, right: 20, bottom: 25, left: 45 };
+  const graphW = width - padding.left - padding.right;
+  const graphH = height - padding.top - padding.bottom;
+
+  const prices = history.map(h => h.price);
+  let minP = Math.min(...prices, 0.95);
+  let maxP = Math.max(...prices, 1.05);
+  if (minP === maxP) { minP -= 0.05; maxP += 0.05; }
+
+  const getX = (idx) => padding.left + (idx / Math.max(history.length - 1, 1)) * graphW;
+  const getY = (val) => padding.top + graphH - ((val - minP) / (maxP - minP)) * graphH;
+
+  let pathD = '';
+  history.forEach((h, idx) => {
+    const x = getX(idx);
+    const y = getY(h.price);
+    pathD += (idx === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1);
+  });
+
+  const areaD = pathD + ' L' + getX(history.length - 1).toFixed(1) + ' ' + (padding.top + graphH) + ' L' + getX(0).toFixed(1) + ' ' + (padding.top + graphH) + ' Z';
+  const pegY = getY(1.00);
+
+  let dotsHTML = '';
+  history.forEach((h, idx) => {
+    const x = getX(idx).toFixed(1);
+    const y = getY(h.price).toFixed(1);
+    const priceStr = h.price.toFixed(2);
+    dotsHTML += '<circle cx="' + x + '" cy="' + y + '" r="4" fill="var(--accent-strong)" stroke="var(--bg)" stroke-width="2"><title>₹' + priceStr + ' INR</title></circle>';
+  });
+
+  const svg = '<svg width="100%" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" style="overflow:visible;">' +
+    '<defs><linearGradient id="pGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4d84e2" stop-opacity="0.3"/><stop offset="100%" stop-color="#4d84e2" stop-opacity="0.0"/></linearGradient></defs>' +
+    '<line x1="' + padding.left + '" y1="' + pegY.toFixed(1) + '" x2="' + (width - padding.right) + '" y2="' + pegY.toFixed(1) + '" stroke="#b98f45" stroke-dasharray="4 4" stroke-width="1.5"/>' +
+    '<text x="' + (width - padding.right) + '" y="' + (pegY - 4).toFixed(1) + '" fill="#b98f45" font-size="10" text-anchor="end">Target Peg ₹1.00</text>' +
+    '<path d="' + areaD + '" fill="url(#pGrad)"/>' +
+    '<path d="' + pathD + '" fill="none" stroke="var(--accent-strong)" stroke-width="2.5" stroke-linecap="round"/>' +
+    dotsHTML +
+    '<text x="' + (padding.left - 6) + '" y="' + (padding.top + 10) + '" fill="var(--text-dim)" font-size="10" text-anchor="end">₹' + maxP.toFixed(2) + '</text>' +
+    '<text x="' + (padding.left - 6) + '" y="' + (padding.top + graphH) + '" fill="var(--text-dim)" font-size="10" text-anchor="end">₹' + minP.toFixed(2) + '</text>' +
+    '</svg>';
+
+  container.innerHTML = svg;
+}
+
+function renderMetricsChart(history) {
+  const container = document.getElementById('metricsChartWrap');
+  if (!container) return;
+
+  if (!history || history.length === 0) {
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:0.85rem;">Collecting monetary metric points...</div>';
+    return;
+  }
+
+  const width = container.clientWidth || 500;
+  const height = 180;
+  const padding = { top: 20, right: 20, bottom: 25, left: 55 };
+  const graphW = width - padding.left - padding.right;
+  const graphH = height - padding.top - padding.bottom;
+
+  const supplies = history.map(h => h.total_supply || 1000000);
+  const shares = history.map(h => h.total_shares || 50000);
+  const bonds = history.map(h => h.total_bonds || 12000);
+
+  const allVals = [...supplies, ...shares, ...bonds];
+  let minV = Math.min(...allVals);
+  let maxV = Math.max(...allVals);
+  if (minV === maxV) { minV = 0; maxV = Math.max(maxV, 100); }
+
+  const getX = (idx) => padding.left + (idx / Math.max(history.length - 1, 1)) * graphW;
+  const getY = (val) => padding.top + graphH - ((val - minV) / (maxV - minV)) * graphH;
+
+  const buildPath = (vals) => {
+    let d = '';
+    vals.forEach((v, idx) => {
+      d += (idx === 0 ? 'M' : 'L') + getX(idx).toFixed(1) + ' ' + getY(v).toFixed(1);
+    });
+    return d;
+  };
+
+  const pathSupply = buildPath(supplies);
+  const pathShares = buildPath(shares);
+  const pathBonds = buildPath(bonds);
+
+  const svg = '<svg width="100%" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" style="overflow:visible;">' +
+    '<path d="' + pathSupply + '" fill="none" stroke="#4d84e2" stroke-width="2" stroke-linecap="round"/>' +
+    '<path d="' + pathShares + '" fill="none" stroke="#b98f45" stroke-width="2" stroke-dasharray="3 3"/>' +
+    '<path d="' + pathBonds + '" fill="none" stroke="#c96a6a" stroke-width="2"/>' +
+    '<text x="' + (padding.left - 6) + '" y="' + (padding.top + 10) + '" fill="var(--text-dim)" font-size="10" text-anchor="end">' + Math.round(maxV) + '</text>' +
+    '<text x="' + (padding.left - 6) + '" y="' + (padding.top + graphH) + '" fill="var(--text-dim)" font-size="10" text-anchor="end">' + Math.round(minV) + '</text>' +
+    '</svg>';
+
+  container.innerHTML = svg;
 }
 
 function getActiveWallet() {
@@ -1739,6 +2036,14 @@ async function refreshStabilityUI() {
       }
     }
   } catch (err) {}
+
+  try {
+    const res = await fetchData('/api/v1/stability/history');
+    if (res && res.history) {
+      renderPriceChart(res.history);
+      renderMetricsChart(res.history);
+    }
+  } catch (err) {}
 }
 
 async function refreshBlockchainUI() {
@@ -1763,6 +2068,7 @@ async function refreshDashboardData() {
 }
 
 function initAvatars() {
+  checkFirstTimeWelcome();
   refreshDashboardData();
   setInterval(refreshDashboardData, 3000);
 }

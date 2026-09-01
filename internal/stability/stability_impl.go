@@ -43,9 +43,12 @@ func NewEngine(store storage.Store, assetMgr token.AssetManager) Engine {
 	basePrices := []float64{0.97, 0.98, 0.99, 1.01, 1.03, 1.02, 0.99, 1.00, 1.04, 1.02}
 	for i, p := range basePrices {
 		eng.priceHistory = append(eng.priceHistory, PricePoint{
-			Timestamp: now - int64((len(basePrices)-i)*300),
-			Price:     p,
-			Volume:    uint64(15000 + (i * 2500)),
+			Timestamp:   now - int64((len(basePrices)-i)*300),
+			Price:       p,
+			Volume:      uint64(15000 + (i * 2500)),
+			TotalSupply: token.Amount(1000000 + (i * 12000)),
+			TotalBonds:  token.Amount(12000 - (i * 500)),
+			TotalShares: token.Amount(50000 + (i * 2000)),
 		})
 	}
 
@@ -236,10 +239,19 @@ func (e *engineImpl) SetMarketPrice(price float64) {
 		return
 	}
 	e.currentPrice = math.Round(price*100) / 100
+	var supp token.Amount = 1000000
+	if e.assetMgr != nil {
+		if s, err := e.assetMgr.TotalSupply(context.Background()); err == nil {
+			supp = s
+		}
+	}
 	e.priceHistory = append(e.priceHistory, PricePoint{
-		Timestamp: time.Now().Unix(),
-		Price:     e.currentPrice,
-		Volume:    uint64(25000 + rand.Intn(5000)),
+		Timestamp:   time.Now().Unix(),
+		Price:       e.currentPrice,
+		Volume:      uint64(25000 + rand.Intn(5000)),
+		TotalSupply: supp,
+		TotalBonds:  e.totalBonds,
+		TotalShares: e.totalStaked,
 	})
 	if len(e.priceHistory) > 30 {
 		e.priceHistory = e.priceHistory[1:]
@@ -266,10 +278,19 @@ func (e *engineImpl) ProcessEpoch(ctx context.Context) error {
 	}
 
 	// Add to price history
+	var supp token.Amount = 1000000
+	if e.assetMgr != nil {
+		if s, err := e.assetMgr.TotalSupply(ctx); err == nil {
+			supp = s
+		}
+	}
 	e.priceHistory = append(e.priceHistory, PricePoint{
-		Timestamp: time.Now().Unix(),
-		Price:     e.currentPrice,
-		Volume:    uint64(20000 + rand.Intn(10000)),
+		Timestamp:   time.Now().Unix(),
+		Price:       e.currentPrice,
+		Volume:      uint64(20000 + rand.Intn(10000)),
+		TotalSupply: supp,
+		TotalBonds:  e.totalBonds,
+		TotalShares: e.totalStaked,
 	})
 	if len(e.priceHistory) > 30 {
 		e.priceHistory = e.priceHistory[1:]
