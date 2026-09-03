@@ -232,19 +232,21 @@ func (e *engineImpl) GetBondPosition(ctx context.Context, user crypto.Address) (
 }
 
 func (e *engineImpl) SetMarketPrice(price float64) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if price <= 0 {
 		return
 	}
-	e.currentPrice = math.Round(price*100) / 100
+
 	var supp token.Amount = 1000000
 	if e.assetMgr != nil {
 		if s, err := e.assetMgr.TotalSupply(context.Background()); err == nil {
 			supp = s
 		}
 	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.currentPrice = math.Round(price*100) / 100
 	e.priceHistory = append(e.priceHistory, PricePoint{
 		Timestamp:   time.Now().Unix(),
 		Price:       e.currentPrice,

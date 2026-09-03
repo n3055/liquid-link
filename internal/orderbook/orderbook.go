@@ -12,6 +12,7 @@ import (
 var (
 	ErrInvalidPrice           = errors.New("price must be greater than zero")
 	ErrInvalidAmount          = errors.New("amount must be greater than zero")
+	ErrInvalidSide            = errors.New("order side must be 'buy' or 'sell'")
 	ErrOrderNotFound          = errors.New("order not found")
 	ErrUnauthorized           = errors.New("unauthorized order modification")
 	ErrOrderCompleted         = errors.New("order is already filled or cancelled")

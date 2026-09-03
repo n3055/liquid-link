@@ -1717,13 +1717,13 @@ function renderMetricsChart(history) {
   const graphW = width - padding.left - padding.right;
   const graphH = height - padding.top - padding.bottom;
 
-  const supplies = history.map(h => h.total_supply || 1000000);
-  const shares = history.map(h => h.total_shares || 50000);
-  const bonds = history.map(h => h.total_bonds || 12000);
+  const supplies = history.map(h => (typeof h.total_supply === 'number' ? h.total_supply : 1000000));
+  const shares = history.map(h => (typeof h.total_shares === 'number' ? h.total_shares : 50000));
+  const bonds = history.map(h => (typeof h.total_bonds === 'number' ? h.total_bonds : 12000));
 
-  const allVals = [...supplies, ...shares, ...bonds];
-  let minV = Math.min(...allVals);
-  let maxV = Math.max(...allVals);
+  const validVals = [...supplies, ...shares, ...bonds].filter(v => typeof v === 'number' && Number.isFinite(v));
+  let minV = validVals.length > 0 ? Math.min(...validVals) : 0;
+  let maxV = validVals.length > 0 ? Math.max(...validVals) : 100;
   if (minV === maxV) { minV = 0; maxV = Math.max(maxV, 100); }
 
   const getX = (idx) => padding.left + (idx / Math.max(history.length - 1, 1)) * graphW;
