@@ -214,7 +214,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if s.peers != nil {
 		pList, err := s.peers.ListPeers(ctx)
 		if err == nil {
-			peerCount = len(pList)
+			for _, p := range pList {
+				if p.ID != s.cfg.ID {
+					peerCount++
+				}
+			}
 		}
 	}
 

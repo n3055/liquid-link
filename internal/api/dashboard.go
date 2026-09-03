@@ -78,7 +78,13 @@ func (s *Server) collectDashboardData(ctx context.Context) *dashboardData {
 
 	if s.peers != nil {
 		if peers, err := s.peers.ListPeers(ctx); err == nil {
-			d.PeerCount = len(peers)
+			remoteCount := 0
+			for _, p := range peers {
+				if p.ID != s.cfg.ID {
+					remoteCount++
+				}
+			}
+			d.PeerCount = remoteCount
 		}
 	}
 
