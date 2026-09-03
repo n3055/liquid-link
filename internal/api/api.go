@@ -959,7 +959,13 @@ type bluetoothBroadcastReq struct {
 // [Transport] handleBluetoothBroadcast accepts and relays an offline signed transaction over Bluetooth.
 func (s *Server) handleBluetoothBroadcast(w http.ResponseWriter, r *http.Request) {
 	var req bluetoothBroadcastReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Payload == "" {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	payload := strings.TrimSpace(req.Payload)
+	if payload == "" || len(payload) < 5 {
 		respondError(w, http.StatusBadRequest, "invalid or empty bluetooth payload")
 		return
 	}
