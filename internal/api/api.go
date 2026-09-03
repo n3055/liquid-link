@@ -472,6 +472,7 @@ func (s *Server) syncPeerChannelUpdate(ch *pcn.Channel) {
 		return
 	}
 
+	client := &http.Client{Timeout: 3 * time.Second}
 	for _, p := range peers {
 		if p.ID == s.cfg.ID || p.Endpoint == "" {
 			continue
@@ -482,7 +483,7 @@ func (s *Server) syncPeerChannelUpdate(ch *pcn.Channel) {
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err == nil && resp != nil {
 			_ = resp.Body.Close()
 		}
