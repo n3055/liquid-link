@@ -254,6 +254,90 @@ func TestBug_BuyBidFillAndCancel(t *testing.T) {
 	}
 }
 
+func TestPartialFill_MultipleMatches(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockBalanceRepo{balances: make(map[crypto.Address]token.Amount)}
+	store := &mockStore{data: make(map[string][]byte)}
+	assetMgr := token.NewAssetManager(repo, store)
+	fiatMgr := fiat.NewManager()
+
+	eng := orderbook.NewEngine(assetMgr, nil, fiatMgr)
+
+	buyer := crypto.Address("0xbuyer_multi")
+	seller1 := crypto.Address("0xseller1_multi")
+	seller2 := crypto.Address("0xseller2_multi")
+
+	_ = assetMgr.Mint(ctx, seller1, 50)
+	_ = assetMgr.Mint(ctx, seller2, 100)
+	_ = fiatMgr.CreditINR(ctx, buyer, 1000.0)
+
+	// Buyer places buy order for 100 LQD at 1.00 INR
+	buyOrd := &orderbook.Order{
+		User:   buyer,
+		Side:   orderbook.SideBuy,
+		Price:  1.00,
+		Amount: 100,
+	}
+	placedBuy, trades1, err := eng.PlaceOrder(ctx, buyOrd)
+	if err != nil {
+		t.Fatalf("failed to place buy order: %v", err)
+	}
+	t.Logf("Placed buy order %s, trades count: %d, status: %s, filled: %d", placedBuy.ID, len(trades1), placedBuy.Status, placedBuy.Filled)
+
+	// Seller 1 places sell order for 50 LQD at 1.00 INR
+	sellOrd1 := &orderbook.Order{
+		User:   seller1,
+		Side:   orderbook.SideSell,
+		Price:  1.00,
+		Amount: 50,
+	}
+	placedSell1, trades2, err := eng.PlaceOrder(ctx, sellOrd1)
+	if err != nil {
+		t.Fatalf("failed to place sell order 1: %v", err)
+	}
+	t.Logf("Placed sell order 1 %s, trades count: %d, status: %s, filled: %d", placedSell1.ID, len(trades2), placedSell1.Status, placedSell1.Filled)
+	t.Logf("Buy order after sell 1: status: %s, filled: %d", placedBuy.Status, placedBuy.Filled)
+
+	// Seller 2 places sell order for 100 LQD at 1.00 INR
+	sellOrd2 := &orderbook.Order{
+		User:   seller2,
+		Side:   orderbook.SideSell,
+		Price:  1.00,
+		Amount: 100,
+	}
+	placedSell2, trades3, err := eng.PlaceOrder(ctx, sellOrd2)
+	if err != nil {
+		t.Fatalf("failed to place sell order 2: %v", err)
+	}
+	t.Logf("Placed sell order 2 %s, trades count: %d, status: %s, filled: %d", placedSell2.ID, len(trades3), placedSell2.Status, placedSell2.Filled)
+	t.Logf("Buy order after sell 2: status: %s, filled: %d", placedBuy.Status, placedBuy.Filled)
+
+	buyerLQD, _ := assetMgr.BalanceOf(ctx, buyer)
+	seller1LQD, _ := assetMgr.BalanceOf(ctx, seller1)
+	seller2LQD, _ := assetMgr.BalanceOf(ctx, seller2)
+
+	buyerAcc, _ := fiatMgr.GetAccount(ctx, buyer)
+	seller1Acc, _ := fiatMgr.GetAccount(ctx, seller1)
+	seller2Acc, _ := fiatMgr.GetAccount(ctx, seller2)
+
+	t.Logf("Final Buyer LQD: %d (expected 100)", buyerLQD)
+	t.Logf("Final Seller1 LQD: %d (expected 0)", seller1LQD)
+	t.Logf("Final Seller2 LQD: %d (expected 50)", seller2LQD)
+	t.Logf("Final Buyer INR Reserved: %.2f (expected 0.00)", buyerAcc.Reserved)
+	t.Logf("Final Seller1 INR Available: %.2f (expected 1050.00)", seller1Acc.Available)
+	t.Logf("Final Seller2 INR Available: %.2f (expected 1050.00)", seller2Acc.Available)
+
+	if buyerLQD != 100 {
+		t.Errorf("buyer LQD mismatch: expected 100, got %d", buyerLQD)
+	}
+	if seller1LQD != 0 {
+		t.Errorf("seller1 LQD mismatch: expected 0, got %d", seller1LQD)
+	}
+	if seller2LQD != 50 {
+		t.Errorf("seller2 LQD mismatch: expected 50, got %d", seller2LQD)
+	}
+}
+
 func TestOrderbook_InvalidSide(t *testing.T) {
 	ctx := context.Background()
 	fiatMgr := fiat.NewManager()
