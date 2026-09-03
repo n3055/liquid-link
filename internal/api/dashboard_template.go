@@ -606,9 +606,9 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
       <!-- User Active Open Orders -->
       <div style="padding:16px; border-top:1px solid var(--border);">
-        <h3 style="font-size:0.9rem; color:var(--text-dim); margin-bottom:10px;">My Active Open Orders</h3>
+        <h3 style="font-size:0.9rem; color:var(--text-dim); margin-bottom:10px;">My Orders (Active & History)</h3>
         <div id="userOrdersContainer">
-          <div class="empty-row">No open limit orders for active wallet.</div>
+          <div class="empty-row">No limit orders for active wallet.</div>
         </div>
       </div>
     </div>
@@ -1929,21 +1929,29 @@ async function refreshOrderbookUI() {
     const userOrders = res.orders || res || [];
     const container = document.getElementById('userOrdersContainer');
     if (container && Array.isArray(userOrders)) {
-      const openOrders = userOrders.filter(o => o.status === 'open' || o.status === 'partial');
-      if (openOrders.length > 0) {
+      if (userOrders.length > 0) {
         let html = '';
-        openOrders.forEach(o => {
+        userOrders.forEach(o => {
           const isBuy = o.side === 'buy';
           const sideColor = isBuy ? 'var(--success)' : 'var(--red)';
           const priceStr = (typeof o.price === 'number') ? o.price.toFixed(2) : o.price;
+          const isCanCancel = (o.status === 'open' || o.status === 'partial');
+          let badgeClass = 'badge-pending';
+          if (o.status === 'open' || o.status === 'partial') badgeClass = 'badge-active';
+          else if (o.status === 'filled') badgeClass = 'badge-settled';
+
+          const actionBtn = isCanCancel 
+            ? '<button class="btn btn-sm btn-ghost" onclick="cancelOrderbookOrder(\'' + o.id + '\')">Cancel</button>' 
+            : '<span style="font-size:0.75rem; color:var(--text-faint); text-transform:uppercase;">Closed</span>';
+
           html += '<div class="list-row"><div class="row-main">' +
-            '<div class="row-title"><span style="color:' + sideColor + '; font-weight:700; text-transform:uppercase;">' + o.side + '</span> ' + o.id + ' <span class="badge badge-active">' + o.status + '</span></div>' +
+            '<div class="row-title"><span style="color:' + sideColor + '; font-weight:700; text-transform:uppercase;">' + o.side + '</span> ' + o.id + ' <span class="badge ' + badgeClass + '">' + o.status + '</span></div>' +
             '<div class="row-sub">Price: ₹' + priceStr + ' | Filled: ' + o.filled + '/' + o.amount + ' LQD</div></div>' +
-            '<div class="row-side"><button class="btn btn-sm btn-ghost" onclick="cancelOrderbookOrder(\'' + o.id + '\')">Cancel</button></div></div>';
+            '<div class="row-side">' + actionBtn + '</div></div>';
         });
         container.innerHTML = html;
       } else {
-        container.innerHTML = '<div class="empty-row">No open limit orders for active wallet.</div>';
+        container.innerHTML = '<div class="empty-row">No limit orders for active wallet.</div>';
       }
     }
   } catch (err) {}
