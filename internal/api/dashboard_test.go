@@ -81,6 +81,18 @@ func TestDashboardRendering(t *testing.T) {
 			if !strings.Contains(body, "metricsChartWrap") {
 				t.Errorf("expected metricsChartWrap container in dashboard body for %s", path)
 			}
+			if !strings.Contains(body, "statInrPool") {
+				t.Errorf("expected statInrPool element ID in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "totalStakedSharesVal") {
+				t.Errorf("expected totalStakedSharesVal element ID in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "totalOutstandingBondsVal") {
+				t.Errorf("expected totalOutstandingBondsVal element ID in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "totalSupplyConvertedVal") {
+				t.Errorf("expected totalSupplyConvertedVal element ID in dashboard body for %s", path)
+			}
 		})
 	}
 }

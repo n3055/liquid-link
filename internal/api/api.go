@@ -159,6 +159,11 @@ func (s *Server) setupRoutes() {
 			br.Get("/utr/{utr}", s.handleGetUTRMapping)
 		})
 
+		// Fiat Bank actions
+		r.Route("/fiat", func(fr chi.Router) {
+			fr.Get("/pool", s.handleFiatPool)
+		})
+
 		// Blockchain & Consensus
 		r.Route("/blockchain", func(bcr chi.Router) {
 			bcr.Get("/height", s.handleBlockchainHeight)
@@ -1046,6 +1051,35 @@ func (s *Server) handleWalletCreate(w http.ResponseWriter, r *http.Request) {
 		"address":     string(addr),
 		"balance":     1000,
 		"inr_balance": 1000.00,
+	})
+}
+
+// [Fiat Bank] handleFiatPool returns the aggregate INR reserve pool balance and active fiat bank metrics.
+func (s *Server) handleFiatPool(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	fiatM := s.getFiatManager()
+	totalPool, err := fiatM.GetTotalPoolReserve(ctx)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to get total fiat pool reserve: "+err.Error())
+		return
+	}
+
+	userAddr := ""
+	var userAvailable float64
+	var userReserved float64
+	if s.wallet != nil {
+		userAddr = string(s.wallet.Address())
+		if acc, err := fiatM.GetAccount(ctx, s.wallet.Address()); err == nil && acc != nil {
+			userAvailable = acc.Available
+			userReserved = acc.Reserved
+		}
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"total_inr_pool": totalPool,
+		"active_user":    userAddr,
+		"user_available": userAvailable,
+		"user_reserved":  userReserved,
 	})
 }
 

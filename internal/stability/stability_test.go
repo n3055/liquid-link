@@ -119,3 +119,46 @@ func TestStability_StakingFlow(t *testing.T) {
 		t.Errorf("expected 500 fetched staked shares, got %d", fetched.StakedShares)
 	}
 }
+
+func TestStability_InMemoryPersistence(t *testing.T) {
+	ctx := context.Background()
+	user := crypto.Address("0xinmemoryuser")
+
+	// Initialize engine with store = nil
+	eng := stability.NewEngine(nil, nil)
+
+	pos, err := eng.StakeShares(ctx, user, 300)
+	if err != nil {
+		t.Fatalf("failed to stake shares in memory: %v", err)
+	}
+	if pos.StakedShares != 300 {
+		t.Errorf("expected 300 staked shares, got %d", pos.StakedShares)
+	}
+
+	stPos, err := eng.GetStakingPosition(ctx, user)
+	if err != nil {
+		t.Fatalf("failed to get staking position in memory: %v", err)
+	}
+	if stPos.StakedShares != 300 {
+		t.Errorf("expected 300 stored in-memory staked shares, got %d", stPos.StakedShares)
+	}
+
+	// Force contraction price to test bond purchase
+	eng.SetMarketPrice(0.95)
+
+	bdPos, err := eng.BuyBonds(ctx, user, 100)
+	if err != nil {
+		t.Fatalf("failed to buy bonds in memory: %v", err)
+	}
+	if bdPos.BondsHeld != 115 {
+		t.Errorf("expected 115 bonds held (15%% discount), got %d", bdPos.BondsHeld)
+	}
+
+	fetchedBd, err := eng.GetBondPosition(ctx, user)
+	if err != nil {
+		t.Fatalf("failed to get bond position in memory: %v", err)
+	}
+	if fetchedBd.BondsHeld != 115 {
+		t.Errorf("expected 115 stored in-memory bonds held, got %d", fetchedBd.BondsHeld)
+	}
+}

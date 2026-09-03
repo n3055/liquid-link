@@ -495,6 +495,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div class="stat-strip">
     <div class="stat-card"><div class="stat-title">Status</div><div class="status-pill"><span class="dot"></span>Online</div></div>
     <div class="stat-card"><div class="stat-title">Total supply</div><div class="stat-val" id="statTotalSupply">{{ .TotalSupply }}</div></div>
+    <div class="stat-card"><div class="stat-title">INR Reserve Pool</div><div class="stat-val" style="color:var(--success);" id="statInrPool">₹{{ printf "%.2f" .TotalINRPool }} INR</div></div>
     <div class="stat-card"><div class="stat-title">Block height</div><div class="stat-val" id="statBlockHeight">{{ .BlockHeight }}</div></div>
     <div class="stat-card"><div class="stat-title">Peers</div><div class="stat-val" id="statPeerCount">{{ .PeerCount }}</div></div>
   </div>
@@ -560,9 +561,9 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
         <!-- Place Order Form -->
         <div style="background:var(--surface-2); border-radius:12px; padding:16px; border:1px solid var(--border);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:6px;">
             <h3 style="font-size:0.95rem; color:var(--text); margin:0;">Place Limit Order</h3>
-            <span style="font-size:0.78rem; color:var(--text-dim);">Available: <strong id="obAvailableINR" style="color:var(--success);">₹{{ printf "%.2f" .INRBalance }} INR</strong></span>
+            <span style="font-size:0.78rem; color:var(--text-dim);">Available: <strong id="obAvailableINR" style="color:var(--success);">₹{{ printf "%.2f" .INRBalance }} INR</strong> | Bank Pool: <strong id="obInrPoolVal" style="color:var(--accent-strong);">₹{{ printf "%.2f" .TotalINRPool }} INR</strong></span>
           </div>
           <form onsubmit="submitOrderbookOrder(event)">
             <div class="field">
@@ -648,11 +649,23 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
           <div style="font-size:1.1rem; font-weight:700; color:var(--amber);" id="stakingApyVal">{{ if .StabilityStatus }}{{ printf "%.1f" .StabilityStatus.CurrentAPY }}{{ else }}14.5{{ end }}%</div>
         </div>
         <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
-          <div style="font-size:0.75rem; color:var(--text-dim);">Staked Shares</div>
+          <div style="font-size:0.75rem; color:var(--text-dim);">Protocol Staked Shares</div>
+          <div style="font-size:1.1rem; font-weight:700; color:#b98f45;" id="totalStakedSharesVal">{{ if .StabilityStatus }}{{ .StabilityStatus.TotalStakedShares }}{{ else }}50000{{ end }} Shares</div>
+        </div>
+        <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
+          <div style="font-size:0.75rem; color:var(--text-dim);">Protocol Outstanding Bonds</div>
+          <div style="font-size:1.1rem; font-weight:700; color:#c96a6a;" id="totalOutstandingBondsVal">{{ if .StabilityStatus }}{{ .StabilityStatus.TotalOutstandingBonds }}{{ else }}12000{{ end }} Bonds</div>
+        </div>
+        <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
+          <div style="font-size:0.75rem; color:var(--text-dim);">Supply Converted to Bonds & Shares</div>
+          <div style="font-size:1.1rem; font-weight:700; color:var(--primary);" id="totalSupplyConvertedVal">{{ if .StabilityStatus }}{{ .StabilityStatus.TotalStakedShares }}{{ else }}62000{{ end }} LQD</div>
+        </div>
+        <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
+          <div style="font-size:0.75rem; color:var(--text-dim);">My Staked Shares</div>
           <div style="font-size:1.1rem; font-weight:700;" id="userStakedShares">{{ .StakedShares }} Shares</div>
         </div>
         <div style="background:var(--surface-2); padding:12px; border-radius:10px;">
-          <div style="font-size:0.75rem; color:var(--text-dim);">Bonds Held</div>
+          <div style="font-size:0.75rem; color:var(--text-dim);">My Bonds Held</div>
           <div style="font-size:1.1rem; font-weight:700;" id="userBondsHeld">{{ .BondsHeld }} Bonds</div>
         </div>
       </div>
@@ -2059,6 +2072,22 @@ async function refreshStabilityUI() {
         stBadge.textContent = status.state;
         stBadge.className = 'badge ' + (status.state === 'expansion' ? 'badge-active' : 'badge-pending');
       }
+
+      const totStEl = document.getElementById('totalStakedSharesVal');
+      if (totStEl && status.total_staked_shares !== undefined) {
+        totStEl.textContent = status.total_staked_shares + ' Shares';
+      }
+
+      const totBdEl = document.getElementById('totalOutstandingBondsVal');
+      if (totBdEl && status.total_outstanding_bonds !== undefined) {
+        totBdEl.textContent = status.total_outstanding_bonds + ' Bonds';
+      }
+
+      const totConvEl = document.getElementById('totalSupplyConvertedVal');
+      if (totConvEl && status.total_staked_shares !== undefined && status.total_outstanding_bonds !== undefined) {
+        const conv = (status.total_staked_shares || 0) + (status.total_outstanding_bonds || 0);
+        totConvEl.textContent = conv + ' LQD';
+      }
     }
   } catch (err) {}
 
@@ -2067,6 +2096,19 @@ async function refreshStabilityUI() {
     if (res && res.history) {
       renderPriceChart(res.history);
       renderMetricsChart(res.history);
+    }
+  } catch (err) {}
+}
+
+async function refreshFiatPoolUI() {
+  try {
+    const res = await fetchData('/api/v1/fiat/pool');
+    if (res && res.total_inr_pool !== undefined) {
+      const poolStr = (typeof res.total_inr_pool === 'number') ? res.total_inr_pool.toFixed(2) : res.total_inr_pool;
+      const el = document.getElementById('statInrPool');
+      if (el) el.textContent = '₹' + poolStr + ' INR';
+      const obPoolEl = document.getElementById('obInrPoolVal');
+      if (obPoolEl) obPoolEl.textContent = '₹' + poolStr + ' INR';
     }
   } catch (err) {}
 }
@@ -2088,7 +2130,8 @@ async function refreshDashboardData() {
     refreshChannelsUI(),
     refreshBridgeUI(),
     refreshStabilityUI(),
-    refreshBlockchainUI()
+    refreshBlockchainUI(),
+    refreshFiatPoolUI()
   ]);
 }
 

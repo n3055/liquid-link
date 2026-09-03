@@ -3,39 +3,41 @@ package stability
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
 	"github.com/n3055/liquid-link/internal/crypto"
 	"github.com/n3055/liquid-link/internal/storage"
 	"github.com/n3055/liquid-link/internal/token"
 )
 
 type engineImpl struct {
-	mu           sync.RWMutex
-	store        storage.Store
-	assetMgr     token.AssetManager
-	currentPrice float64
-	epoch        uint64
-	priceHistory []PricePoint
-	totalStaked  token.Amount
-	totalBonds   token.Amount
+	mu               sync.RWMutex
+	store            storage.Store
+	assetMgr         token.AssetManager
+	currentPrice     float64
+	epoch            uint64
+	priceHistory     []PricePoint
+	totalStaked      token.Amount
+	totalBonds       token.Amount
+	stakingPositions map[crypto.Address]*StakingPosition
+	bondPositions    map[crypto.Address]*BondPosition
 }
 
 // NewEngine creates and initializes a new Seigniorage Stability Engine.
 func NewEngine(store storage.Store, assetMgr token.AssetManager) Engine {
 	eng := &engineImpl{
-		store:        store,
-		assetMgr:     assetMgr,
-		currentPrice: 1.02, // Initial price: Slight expansion (₹1.02)
-		epoch:        1,
-		totalStaked:  50000,
-		totalBonds:   12000,
+		store:            store,
+		assetMgr:         assetMgr,
+		currentPrice:     1.02, // Initial price: Slight expansion (₹1.02)
+		epoch:            1,
+		totalStaked:      50000,
+		totalBonds:       12000,
+		stakingPositions: make(map[crypto.Address]*StakingPosition),
+		bondPositions:    make(map[crypto.Address]*BondPosition),
 	}
 
 	// Generate initial price history for charting
@@ -334,25 +336,40 @@ func (e *engineImpl) calculateAPY(price float64, totalStaked token.Amount) float
 }
 
 func (e *engineImpl) loadStakingPosition(ctx context.Context, user crypto.Address) (*StakingPosition, error) {
-	if e.store == nil {
-		return &StakingPosition{Address: user, LastEpoch: e.epoch}, nil
+	if pos, exists := e.stakingPositions[user]; exists && pos != nil {
+		return &StakingPosition{
+			Address:      pos.Address,
+			StakedShares: pos.StakedShares,
+			AccruedYield: pos.AccruedYield,
+			LastEpoch:    pos.LastEpoch,
+		}, nil
 	}
-	key := []byte(fmt.Sprintf("stability:stake:%s", user))
-	data, err := e.store.Get(ctx, key)
-	if err != nil {
-		if errors.Is(err, badger.ErrKeyNotFound) {
-			return &StakingPosition{Address: user, LastEpoch: e.epoch}, nil
+	if e.store != nil {
+		key := []byte(fmt.Sprintf("stability:stake:%s", user))
+		data, err := e.store.Get(ctx, key)
+		if err == nil {
+			var pos StakingPosition
+			if err := json.Unmarshal(data, &pos); err == nil {
+				e.stakingPositions[user] = &pos
+				return &pos, nil
+			}
 		}
-		return nil, err
 	}
-	var pos StakingPosition
-	if err := json.Unmarshal(data, &pos); err != nil {
-		return nil, err
-	}
-	return &pos, nil
+	pos := &StakingPosition{Address: user, LastEpoch: e.epoch}
+	e.stakingPositions[user] = pos
+	return pos, nil
 }
 
 func (e *engineImpl) saveStakingPosition(ctx context.Context, pos *StakingPosition) error {
+	if pos == nil {
+		return nil
+	}
+	e.stakingPositions[pos.Address] = &StakingPosition{
+		Address:      pos.Address,
+		StakedShares: pos.StakedShares,
+		AccruedYield: pos.AccruedYield,
+		LastEpoch:    pos.LastEpoch,
+	}
 	if e.store == nil {
 		return nil
 	}
@@ -365,25 +382,40 @@ func (e *engineImpl) saveStakingPosition(ctx context.Context, pos *StakingPositi
 }
 
 func (e *engineImpl) loadBondPosition(ctx context.Context, user crypto.Address) (*BondPosition, error) {
-	if e.store == nil {
-		return &BondPosition{Address: user}, nil
+	if pos, exists := e.bondPositions[user]; exists && pos != nil {
+		return &BondPosition{
+			Address:       pos.Address,
+			BondsHeld:     pos.BondsHeld,
+			PurchasePrice: pos.PurchasePrice,
+			RedemptionVal: pos.RedemptionVal,
+		}, nil
 	}
-	key := []byte(fmt.Sprintf("stability:bond:%s", user))
-	data, err := e.store.Get(ctx, key)
-	if err != nil {
-		if errors.Is(err, badger.ErrKeyNotFound) {
-			return &BondPosition{Address: user}, nil
+	if e.store != nil {
+		key := []byte(fmt.Sprintf("stability:bond:%s", user))
+		data, err := e.store.Get(ctx, key)
+		if err == nil {
+			var pos BondPosition
+			if err := json.Unmarshal(data, &pos); err == nil {
+				e.bondPositions[user] = &pos
+				return &pos, nil
+			}
 		}
-		return nil, err
 	}
-	var pos BondPosition
-	if err := json.Unmarshal(data, &pos); err != nil {
-		return nil, err
-	}
-	return &pos, nil
+	pos := &BondPosition{Address: user}
+	e.bondPositions[user] = pos
+	return pos, nil
 }
 
 func (e *engineImpl) saveBondPosition(ctx context.Context, pos *BondPosition) error {
+	if pos == nil {
+		return nil
+	}
+	e.bondPositions[pos.Address] = &BondPosition{
+		Address:       pos.Address,
+		BondsHeld:     pos.BondsHeld,
+		PurchasePrice: pos.PurchasePrice,
+		RedemptionVal: pos.RedemptionVal,
+	}
 	if e.store == nil {
 		return nil
 	}

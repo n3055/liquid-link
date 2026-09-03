@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/n3055/liquid-link/internal/blockchain"
@@ -515,5 +516,24 @@ func TestBroadcastTxEndpoint(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK for broadcast tx, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+// [Fiat Bank] TestFiatPoolEndpoint tests retrieving aggregate fiat bank pool reserve metrics.
+func TestFiatPoolEndpoint(t *testing.T) {
+	s, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fiat/pool", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for fiat pool, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "total_inr_pool") {
+		t.Errorf("expected total_inr_pool in response body, got %s", body)
 	}
 }

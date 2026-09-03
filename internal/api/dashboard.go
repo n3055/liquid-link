@@ -32,6 +32,7 @@ type dashboardData struct {
 	BondsHeld        token.Amount
 	INRBalance       float64
 	INRReserved      float64
+	TotalINRPool     float64
 }
 
 // [Dashboard] collectDashboardData gathers live system statistics across all node sub-services.
@@ -109,9 +110,13 @@ func (s *Server) collectDashboardData(ctx context.Context) *dashboardData {
 		d.StabilityHistory = history
 	}
 
+	fiatM := s.getFiatManager()
+	if poolRes, err := fiatM.GetTotalPoolReserve(ctx); err == nil {
+		d.TotalINRPool = poolRes
+	}
+
 	if s.wallet != nil {
 		userAddr := s.wallet.Address()
-		fiatM := s.getFiatManager()
 		if acc, err := fiatM.GetAccount(ctx, userAddr); err == nil && acc != nil {
 			d.INRBalance = acc.Available
 			d.INRReserved = acc.Reserved
