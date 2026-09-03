@@ -755,12 +755,15 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       </div>
       <div id="bridgeListContainer">
       {{ range .UTRMappings }}
-      <div class="list-row">
+      <div class="list-row" onclick="openVerifySheet('{{ .UTR }}')" style="cursor:pointer;">
         <div class="row-main">
           <div class="row-title">{{ .UTR }} <span class="badge {{ if eq (printf "%v" .Status) "SETTLED" }}badge-settled{{ else }}badge-pending{{ end }}">{{ .Status }}</span></div>
           <div class="row-sub">Tx {{ .TransactionID }}</div>
         </div>
-        <div class="row-side">
+        <div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+          {{ if ne (printf "%v" .Status) "SETTLED" }}
+          <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openVerifySheet('{{ .UTR }}');">Verify & Settle</button>
+          {{ end }}
           <div class="bottom">{{ .CreatedAt.Format "02 Jan, 15:04" }}</div>
         </div>
       </div>
@@ -775,9 +778,21 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="segActivity" class="panel">
     <div class="section-card">
       <div class="section-head">
-        <h2>Recent blocks <span class="count" id="blocksCount">({{ len .RecentBlocks }})</span></h2>
+        <h2>Activity & Event Feed <span class="count" id="blocksCount">({{ len .ActivityLog }})</span></h2>
       </div>
       <div id="blocksListContainer">
+      {{ range .ActivityLog }}
+      <div class="list-row">
+        <div class="row-main">
+          <div class="row-title">{{ .Title }}</div>
+          <div class="row-sub">{{ .Subtitle }}</div>
+        </div>
+        <div class="row-side">
+          <div class="top">{{ .Detail }}</div>
+          <div class="bottom">{{ .Timestamp }}</div>
+        </div>
+      </div>
+      {{ else }}
       {{ range .RecentBlocks }}
       <div class="list-row">
         <div class="row-main">
@@ -790,7 +805,8 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         </div>
       </div>
       {{ else }}
-      <div class="empty-row">No blocks produced yet.</div>
+      <div class="empty-row">No activity events recorded yet.</div>
+      {{ end }}
       {{ end }}
       </div>
     </div>
@@ -1054,6 +1070,14 @@ function switchSubpanel(id, btn, scope) {
   root.querySelectorAll('.sheet-subpanel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById(id).classList.add('active');
+}
+
+function openVerifySheet(utr) {
+  openSheet('sheetBridge');
+  const navBtns = document.querySelectorAll('#sheetBridge .sheet-tabs button');
+  if (navBtns && navBtns[1]) switchSubpanel('subBridgeVerify', navBtns[1], 'sheetBridge');
+  const input = document.getElementById('verifyUTR');
+  if (input) input.value = utr;
 }
 
 function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -2046,10 +2070,11 @@ async function refreshBridgeUI() {
           const badgeClass = isSettled ? 'badge-settled' : 'badge-pending';
           const txId = m.transaction_id || m.TransactionID || '';
 
-          html += '<div class="list-row"><div class="row-main">' +
+          const verifyBtn = !isSettled ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openVerifySheet(\'' + m.utr + '\');">Verify & Settle</button>' : '';
+          html += '<div class="list-row" onclick="openVerifySheet(\'' + m.utr + '\')" style="cursor:pointer;"><div class="row-main">' +
             '<div class="row-title">' + m.utr + ' <span class="badge ' + badgeClass + '">' + statusStr + '</span></div>' +
             '<div class="row-sub">Tx ' + txId + '</div></div>' +
-            '<div class="row-side"><div class="bottom">' + (m.created_at || '') + '</div></div></div>';
+            '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">' + verifyBtn + '<div class="bottom">' + (m.created_at || '') + '</div></div></div>';
         });
         container.innerHTML = html;
       } else {

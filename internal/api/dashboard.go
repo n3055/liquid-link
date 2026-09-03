@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/n3055/liquid-link/internal/orderbook"
@@ -10,6 +11,15 @@ import (
 	"github.com/n3055/liquid-link/internal/stability"
 	"github.com/n3055/liquid-link/internal/token"
 )
+
+// [Dashboard] ActivityItem encapsulates unified event log items for the Activity UI feed.
+type ActivityItem struct {
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Subtitle  string `json:"subtitle"`
+	Detail    string `json:"detail"`
+	Timestamp string `json:"timestamp"`
+}
 
 // [Dashboard] dashboardData encapsulates all view-model metrics presented on the node web dashboard.
 type dashboardData struct {
@@ -23,6 +33,7 @@ type dashboardData struct {
 	Channels         []*pcn.Channel
 	UTRMappings      []*receipt.UTRMapping
 	RecentBlocks     []interface{}
+	ActivityLog      []*ActivityItem
 	Tip              interface{}
 	OrderbookDepth   *orderbook.Depth
 	OrderbookTrades  []*orderbook.Trade
@@ -133,6 +144,26 @@ func (s *Server) collectDashboardData(ctx context.Context) *dashboardData {
 		if bdPos, err := stab.GetBondPosition(ctx, userAddr); err == nil && bdPos != nil {
 			d.BondsHeld = bdPos.BondsHeld
 		}
+	}
+
+	// [Fiat Bridge] Populate Unified Activity Feed combining UTRs, Channels, and Blocks
+	for _, m := range d.UTRMappings {
+		d.ActivityLog = append(d.ActivityLog, &ActivityItem{
+			Type:      "bridge",
+			Title:     "Fiat Bridge " + m.UTR,
+			Subtitle:  "Tx " + m.TransactionID,
+			Detail:    m.Status,
+			Timestamp: m.CreatedAt.Format("02 Jan 15:04"),
+		})
+	}
+	for _, ch := range d.Channels {
+		d.ActivityLog = append(d.ActivityLog, &ActivityItem{
+			Type:      "channel",
+			Title:     "State Channel " + ch.ID,
+			Subtitle:  fmt.Sprintf("Seq %d", ch.Sequence),
+			Detail:    string(ch.State),
+			Timestamp: "Active",
+		})
 	}
 
 	return d
