@@ -668,6 +668,15 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
           <div style="font-size:0.75rem; color:var(--text-dim);">My Bonds Held</div>
           <div style="font-size:1.1rem; font-weight:700;" id="userBondsHeld">{{ .BondsHeld }} Bonds</div>
         </div>
+        <div style="grid-column: 1 / -1; background:var(--surface-2); padding:12px; border-radius:10px;">
+          <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-dim); margin-bottom:4px;">
+            <span>Seigniorage Peg Equilibrium Progress (Target: ₹1.00 INR)</span>
+            <span id="pegProgressPercent">100%</span>
+          </div>
+          <div style="width:100%; height:8px; background:var(--border); border-radius:4px; overflow:hidden;">
+            <div id="pegProgressBar" style="width:100%; height:100%; background:linear-gradient(90deg, var(--accent) 0%, var(--success) 100%); transition:width 0.3s ease;"></div>
+          </div>
+        </div>
       </div>
 
       <div style="padding:16px; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
@@ -678,8 +687,9 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
           <form onsubmit="submitStakeShares(event)">
             <div class="field">
               <label>Amount to Stake</label>
-              <input type="number" id="stakeAmount" min="1" value="100" class="input" placeholder="LQD Amount" required>
+              <input type="number" id="stakeAmount" min="1" value="100" class="input" placeholder="LQD Amount" oninput="calcStakeYield()" required>
             </div>
+            <div id="stakeCalcPreview" style="font-size:0.75rem; color:var(--success); margin-top:6px; font-weight:600;">Estimated Annual Yield: +14.50 LQD / year</div>
             <div style="display:flex; gap:10px; margin-top:12px;">
               <button type="submit" class="btn btn-primary" style="flex:1;">Stake Shares</button>
               <button type="button" onclick="submitUnstakeShares()" class="btn btn-secondary" style="flex:1;">Unstake & Claim</button>
@@ -694,8 +704,9 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
           <form onsubmit="submitBuyBonds(event)">
             <div class="field">
               <label>Bond Amount</label>
-              <input type="number" id="bondAmount" min="1" value="50" class="input" placeholder="LQD/Bond Amount" required>
+              <input type="number" id="bondAmount" min="1" value="50" class="input" placeholder="LQD/Bond Amount" oninput="calcBondProfit()" required>
             </div>
+            <div id="bondCalcPreview" style="font-size:0.75rem; color:var(--amber); margin-top:6px; font-weight:600;">Expected Redemption Profit: +0.00 LQD at ₹1.00 peg</div>
             <div style="display:flex; gap:10px; margin-top:12px;">
               <button type="submit" class="btn btn-primary" style="flex:1;">Buy Discounted Bonds</button>
               <button type="button" onclick="submitRedeemBonds()" class="btn btn-secondary" style="flex:1;">Redeem Bonds</button>
@@ -1352,6 +1363,29 @@ async function connectWebBluetooth() {
 async function sendOfflineBluetoothTx() {
   const res = await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-payload-' + Date.now() });
   showAlert('Offline transaction broadcast over Bluetooth Mesh!');
+}
+
+function calcStakeYield() {
+  const amt = parseFloat(document.getElementById('stakeAmount').value) || 0;
+  const apyEl = document.getElementById('stakingApyVal');
+  const apy = apyEl ? (parseFloat(apyEl.textContent) || 14.5) : 14.5;
+  const yieldEst = (amt * (apy / 100)).toFixed(2);
+  const prev = document.getElementById('stakeCalcPreview');
+  if (prev) prev.textContent = 'Estimated Annual Yield: +' + yieldEst + ' LQD / year (' + apy + '% APY)';
+}
+
+function calcBondProfit() {
+  const amt = parseFloat(document.getElementById('bondAmount').value) || 0;
+  const pEl = document.getElementById('marketPriceVal');
+  let price = 1.00;
+  if (pEl) {
+    const m = pEl.textContent.match(/[\d.]+/);
+    if (m) price = parseFloat(m[0]) || 1.00;
+  }
+  const discount = Math.max(0, 1.00 - price);
+  const profit = (amt * discount).toFixed(2);
+  const prev = document.getElementById('bondCalcPreview');
+  if (prev) prev.textContent = 'Expected Redemption Profit: +' + profit + ' LQD when price returns to ₹1.00 peg';
 }
 
 async function submitTransfer(e) {
@@ -2147,6 +2181,14 @@ async function refreshStabilityUI() {
         const conv = (status.total_staked_shares || 0) + (status.total_outstanding_bonds || 0);
         totConvEl.textContent = conv + ' LQD';
       }
+
+      // Update Peg Progress Gauge
+      const priceVal = (typeof status.price === 'number') ? status.price : 1.00;
+      const pct = Math.min(100, Math.max(0, Math.round((priceVal / 1.00) * 100)));
+      const barEl = document.getElementById('pegProgressBar');
+      const pctEl = document.getElementById('pegProgressPercent');
+      if (barEl) barEl.style.width = pct + '%';
+      if (pctEl) pctEl.textContent = pct + '%';
     }
   } catch (err) {}
 
