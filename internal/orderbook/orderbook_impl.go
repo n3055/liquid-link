@@ -72,6 +72,9 @@ func (e *engineImpl) PlaceOrder(ctx context.Context, order *Order) (*Order, []*T
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if order.Side != SideBuy && order.Side != SideSell {
+		return nil, nil, ErrInvalidSide
+	}
 	if order.Price <= 0 {
 		return nil, nil, ErrInvalidPrice
 	}
@@ -176,7 +179,14 @@ func (e *engineImpl) matchBuyOrder(ctx context.Context, buyOrd *Order) []*Trade 
 
 		// Settle fiat INR transfer between buyer reserved escrow and seller available account
 		if e.fiatMgr != nil {
-			_ = e.fiatMgr.TransferINR(ctx, buyOrd.User, sellOrd.User, execINR, buyerReservedDeduction)
+			if err := e.fiatMgr.TransferINR(ctx, buyOrd.User, sellOrd.User, execINR, buyerReservedDeduction); err != nil {
+				// Rollback token settlement if fiat transfer fails
+				if e.assetMgr != nil {
+					_ = e.assetMgr.Credit(ctx, sellOrd.User, matchQty)
+					_ = e.assetMgr.Debit(ctx, buyOrd.User, matchQty)
+				}
+				continue
+			}
 		}
 
 		buyOrd.Filled += matchQty
@@ -273,7 +283,14 @@ func (e *engineImpl) matchSellOrder(ctx context.Context, sellOrd *Order) []*Trad
 
 		// Settle fiat INR transfer between buyer reserved escrow and seller available account
 		if e.fiatMgr != nil {
-			_ = e.fiatMgr.TransferINR(ctx, buyOrd.User, sellOrd.User, execINR, buyerReservedDeduction)
+			if err := e.fiatMgr.TransferINR(ctx, buyOrd.User, sellOrd.User, execINR, buyerReservedDeduction); err != nil {
+				// Rollback token settlement if fiat transfer fails
+				if e.assetMgr != nil {
+					_ = e.assetMgr.Credit(ctx, sellOrd.User, matchQty)
+					_ = e.assetMgr.Debit(ctx, buyOrd.User, matchQty)
+				}
+				continue
+			}
 		}
 
 		sellOrd.Filled += matchQty

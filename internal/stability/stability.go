@@ -36,11 +36,14 @@ type Status struct {
 	Epoch                 uint64       `json:"epoch"`                   // Current stability epoch counter
 }
 
-// PricePoint represents a historical price measurement for charting.
+// PricePoint represents a historical price measurement and protocol state point for charting.
 type PricePoint struct {
-	Timestamp int64   `json:"timestamp"`
-	Price     float64 `json:"price"`
-	Volume    uint64  `json:"volume"`
+	Timestamp   int64        `json:"timestamp"`
+	Price       float64      `json:"price"`
+	Volume      uint64       `json:"volume"`
+	TotalSupply token.Amount `json:"total_supply"`
+	TotalBonds  token.Amount `json:"total_bonds"`
+	TotalShares token.Amount `json:"total_shares"`
 }
 
 // StakingPosition tracks a user's staked shares and accrued interest.

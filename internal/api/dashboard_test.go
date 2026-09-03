@@ -69,6 +69,18 @@ func TestDashboardRendering(t *testing.T) {
 			if !strings.Contains(body, "obAvailableINR") {
 				t.Errorf("expected obAvailableINR element ID in dashboard body for %s", path)
 			}
+			if !strings.Contains(body, "welcomeOverlay") {
+				t.Errorf("expected welcomeOverlay onboarding screen in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "celebrationModal") {
+				t.Errorf("expected celebrationModal animation screen in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "priceChartWrap") {
+				t.Errorf("expected priceChartWrap container in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "metricsChartWrap") {
+				t.Errorf("expected metricsChartWrap container in dashboard body for %s", path)
+			}
 		})
 	}
 }

@@ -19,10 +19,10 @@ var (
 
 // HTLC represents a Hashed Timelock Contract securing a multi-hop payment channel hop.
 type HTLC struct {
-	HashLock  string       `json:"hash_lock"` // SHA-256 hash of pre-image K
-	PreImage  string       `json:"pre_image"` // Secret key K
-	Amount    token.Amount `json:"amount"`
-	Timelock  time.Time    `json:"timelock"`
+	HashLock string       `json:"hash_lock"` // SHA-256 hash of pre-image K
+	PreImage string       `json:"pre_image"` // Secret key K
+	Amount   token.Amount `json:"amount"`
+	Timelock time.Time    `json:"timelock"`
 }
 
 // ChannelEdge represents a directed liquid channel link between two nodes.
