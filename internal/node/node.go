@@ -270,6 +270,7 @@ func (n *Node) startBlockProducer(ctx context.Context) {
 				continue
 			}
 
+			// [Consensus Block] Validate active proposer role before proposing new block
 			nextIndex := currentTip.Header.Index + 1
 			nextBlock := block.NewBlock(nextIndex, currentTip.Hash, nil, n.cfg.Node.ID)
 			sigHash := nextBlock.SigningHash()
