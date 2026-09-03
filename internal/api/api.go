@@ -851,6 +851,11 @@ func (s *Server) handleBridgeRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fm := s.getFiatManager()
+	if fm != nil {
+		_ = fm.ReserveINR(ctx, crypto.Address(req.Receiver), float64(req.Amount))
+	}
+
 	respondJSON(w, http.StatusAccepted, map[string]interface{}{
 		"status":  "bridge_request_created",
 		"mapping": mapping,
@@ -891,6 +896,11 @@ func (s *Server) handleVerifyReceipt(w http.ResponseWriter, r *http.Request) {
 	if err := s.bridge.SettleBridgeRequest(ctx, req.UTR, rec); err != nil {
 		respondError(w, http.StatusBadRequest, "receipt verification failed: "+err.Error())
 		return
+	}
+
+	fm := s.getFiatManager()
+	if fm != nil && s.wallet != nil {
+		_ = fm.CreditINR(ctx, s.wallet.Address(), 100)
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
