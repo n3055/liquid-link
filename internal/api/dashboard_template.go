@@ -567,14 +567,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
           <form onsubmit="submitOrderbookOrder(event)">
             <div class="field">
               <label>Order Type</label>
-              <select id="obOrderSide" class="input" style="width:100%;">
+              <select id="obOrderSide" class="input" style="width:100%;" onchange="updateSuggestedOrderPrice()">
                 <option value="buy">Buy LQD (Bid in INR)</option>
                 <option value="sell">Sell LQD (Ask in INR)</option>
               </select>
             </div>
             <div class="field" style="margin-top:10px;">
               <label>Limit Price in INR (₹)</label>
-              <input type="number" id="obOrderPrice" step="0.01" value="1.00" class="input" placeholder="e.g. 1.00" required>
+              <input type="number" id="obOrderPrice" step="0.01" value="1.01" class="input" placeholder="e.g. 1.01" required>
             </div>
             <div class="field" style="margin-top:10px;">
               <label>Token Amount (LQD)</label>
@@ -1522,9 +1522,24 @@ async function submitOrderbookOrder(e) {
     if (isNaN(amount) || amount <= 0) { showAlert('Valid positive token amount required', true); return; }
 
     const res = await postData('/api/v1/orderbook/order', { user, side, price, amount }, btn);
-    showAlert('Order placed successfully! Trades executed: ' + (res.trades ? res.trades.length : 0));
+    const tradesCount = (res.trades && Array.isArray(res.trades)) ? res.trades.length : 0;
+    if (tradesCount > 0) {
+      showAlert('Trade Executed! Executed ' + tradesCount + ' trade(s). LQD balance updated!');
+    } else {
+      showAlert('Limit order placed! Resting on orderbook at ₹' + price.toFixed(2) + ' INR (INR reserved until matched).');
+    }
     refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
+}
+
+function updateSuggestedOrderPrice() {
+  const side = document.getElementById('obOrderSide').value;
+  const priceInput = document.getElementById('obOrderPrice');
+  if (side === 'buy') {
+    priceInput.value = '1.01';
+  } else {
+    priceInput.value = '0.99';
+  }
 }
 
 async function submitStakeShares(e) {
@@ -1811,8 +1826,10 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
       }
       if (holdings.inr_balance !== undefined) {
         const inrStr = (typeof holdings.inr_balance === 'number') ? holdings.inr_balance.toFixed(2) : holdings.inr_balance;
-        if (inrBalEl) inrBalEl.textContent = '₹' + inrStr + ' INR';
-        if (obInrEl) obInrEl.textContent = '₹' + inrStr + ' INR';
+        const resVal = (typeof holdings.inr_reserved === 'number') ? holdings.inr_reserved : parseFloat(holdings.inr_reserved || 0);
+        const displayINR = '₹' + inrStr + ' INR' + (resVal > 0 ? ' (' + resVal.toFixed(2) + ' Reserved)' : '');
+        if (inrBalEl) inrBalEl.textContent = displayINR;
+        if (obInrEl) obInrEl.textContent = displayINR;
       }
       const stEl = document.getElementById('userStakedShares');
       if (stEl && holdings.staked_shares !== undefined) {
