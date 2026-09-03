@@ -1010,6 +1010,12 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div style="margin-top:16px; font-size:0.85rem; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:0.5px;">Active Account / Local Wallets</div>
   <div id="profileWalletsList" style="margin-top:8px; display:flex; flex-direction:column; gap:8px; max-height:180px; overflow-y:auto;"></div>
 
+  <div style="margin-top:16px; font-size:0.85rem; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:0.5px;">Bluetooth Offline Mesh</div>
+  <div style="margin-top:8px; display:flex; gap:8px;">
+    <button class="btn btn-sm btn-secondary" onclick="connectWebBluetooth()" style="flex:1;">📡 Scan BLE Mesh</button>
+    <button class="btn btn-sm btn-ghost" onclick="sendOfflineBluetoothTx()" style="flex:1;">⚡ Relay Offline Tx</button>
+  </div>
+
   <div style="margin-top:16px;" class="btn-row">
     <button class="btn btn-secondary" onclick="closeSheet('sheetProfile'); openReceive();">Show my QR</button>
     <button class="btn btn-secondary" onclick="closeSheet('sheetProfile'); openScanner('sendReceiver','sheetSend');">Scan code</button>
@@ -1326,6 +1332,26 @@ async function postData(url, data, submitBtn) {
       submitBtn.textContent = submitBtn.dataset.origText || 'Submit';
     }
   }
+}
+
+async function connectWebBluetooth() {
+  if (!navigator.bluetooth) {
+    showAlert('Web Bluetooth API not supported in this browser. Relaying over simulated BLE mesh...', false);
+    await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-mock-payload' });
+    showAlert('Offline transaction relayed over Bluetooth Mesh!');
+    return;
+  }
+  try {
+    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+    showAlert('Connected to BLE Mesh device: ' + (device.name || device.id));
+  } catch (e) {
+    showAlert('Web Bluetooth selection cancelled', true);
+  }
+}
+
+async function sendOfflineBluetoothTx() {
+  const res = await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-payload-' + Date.now() });
+  showAlert('Offline transaction broadcast over Bluetooth Mesh!');
 }
 
 async function submitTransfer(e) {

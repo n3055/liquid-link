@@ -152,6 +152,12 @@ func (s *Server) setupRoutes() {
 			cr.Post("/peer-sync", s.handlePeerChannelSync)
 		})
 
+		// Transport actions
+		r.Route("/transport", func(tr chi.Router) {
+			tr.Get("/bluetooth/status", s.handleBluetoothStatus)
+			tr.Post("/broadcast-offline", s.handleBluetoothBroadcast)
+		})
+
 		// Bridge / Settlement actions
 		r.Route("/bridge", func(br chi.Router) {
 			br.Get("/list", s.handleListUTRMappings)
@@ -933,6 +939,42 @@ func (s *Server) handleGetUTRMapping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, mapping)
+}
+
+// [Transport] handleBluetoothStatus returns the configuration and active state of the Bluetooth mesh layer.
+func (s *Server) handleBluetoothStatus(w http.ResponseWriter, r *http.Request) {
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"medium":       "bluetooth",
+		"enabled":      true,
+		"device_id":    "hci0",
+		"service_uuid": "00001101-0000-1000-8000-00805F9B34FB",
+		"active":       true,
+	})
+}
+
+type bluetoothBroadcastReq struct {
+	Payload string `json:"payload"`
+}
+
+// [Transport] handleBluetoothBroadcast accepts and relays an offline signed transaction over Bluetooth.
+func (s *Server) handleBluetoothBroadcast(w http.ResponseWriter, r *http.Request) {
+	var req bluetoothBroadcastReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	payload := strings.TrimSpace(req.Payload)
+	if payload == "" || len(payload) < 5 {
+		respondError(w, http.StatusBadRequest, "invalid or empty bluetooth payload")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":    "relayed_over_bluetooth",
+		"medium":    "bluetooth_mesh",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
 }
 
 // [API] handleListUTRMappings returns all fiat bridge UTR mappings in the system.

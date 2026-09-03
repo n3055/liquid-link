@@ -302,6 +302,29 @@ func TestFiatBridgeEndpoints(t *testing.T) {
 	}
 }
 
+func TestBluetoothEndpoints(t *testing.T) {
+	s, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// 1. Bluetooth status
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/transport/bluetooth/status", nil)
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for bluetooth status, got %d", rr.Code)
+	}
+
+	// 2. Broadcast offline
+	body := []byte(`{"payload":"mock-offline-signed-tx-payload"}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/transport/broadcast-offline", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for bluetooth broadcast, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestPeerEndpoints(t *testing.T) {
 	s, _, cleanup := setupTestServer(t)
 	defer cleanup()

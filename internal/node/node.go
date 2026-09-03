@@ -21,6 +21,7 @@ import (
 	"github.com/n3055/liquid-link/internal/storage"
 	"github.com/n3055/liquid-link/internal/token"
 	"github.com/n3055/liquid-link/internal/transport"
+	"github.com/n3055/liquid-link/internal/transport/bluetooth"
 	"github.com/n3055/liquid-link/internal/wallet"
 )
 
@@ -145,6 +146,8 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 	})
 
 	transports := make([]transport.Transport, 0)
+	btTransport := bluetooth.NewMeshTransport(&cfg.Transports.Bluetooth)
+	transports = append(transports, btTransport)
 
 	// 9. API Server with full dependencies injected
 	apiSrv := api.NewServer(
