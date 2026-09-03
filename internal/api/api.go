@@ -900,7 +900,11 @@ func (s *Server) handleVerifyReceipt(w http.ResponseWriter, r *http.Request) {
 
 	fm := s.getFiatManager()
 	if fm != nil && s.wallet != nil {
-		_ = fm.CreditINR(ctx, s.wallet.Address(), 100)
+		creditAmt := float64(rec.Amount)
+		if creditAmt == 0 {
+			creditAmt = 100.0
+		}
+		_ = fm.CreditINR(ctx, s.wallet.Address(), creditAmt)
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
