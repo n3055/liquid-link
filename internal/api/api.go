@@ -149,6 +149,7 @@ func (s *Server) setupRoutes() {
 			cr.Post("/update", s.handleUpdateChannel)
 			cr.Post("/settle", s.handleSettleChannel)
 			cr.Post("/challenge", s.handleChallengeChannel)
+			cr.Post("/peer-sync", s.handlePeerChannelSync)
 		})
 
 		// Bridge / Settlement actions
@@ -423,6 +424,71 @@ func (s *Server) handleBroadcastTx(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// [PCN State] handlePeerChannelSync receives channel state updates broadcast by peer nodes.
+func (s *Server) handlePeerChannelSync(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var ch pcn.Channel
+	if err := json.NewDecoder(r.Body).Decode(&ch); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid channel payload")
+		return
+	}
+
+	if ch.ID == "" {
+		respondError(w, http.StatusBadRequest, "channel id required")
+		return
+	}
+
+	if s.pcnRegistry == nil {
+		respondError(w, http.StatusInternalServerError, "pcn registry uninitialized")
+		return
+	}
+
+	if err := s.pcnRegistry.RegisterChannel(ctx, &ch); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to sync peer channel: "+err.Error())
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status": "peer_channel_synced",
+		"id":     ch.ID,
+	})
+}
+
+// [PCN State] syncPeerChannelUpdate broadcasts off-chain channel state updates to registered peer endpoints over HTTP REST.
+func (s *Server) syncPeerChannelUpdate(ch *pcn.Channel) {
+	if ch == nil || s.peers == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	peers, err := s.peers.ListPeers(ctx)
+	if err != nil {
+		return
+	}
+
+	data, err := json.Marshal(ch)
+	if err != nil {
+		return
+	}
+
+	for _, p := range peers {
+		if p.ID == s.cfg.ID || p.Endpoint == "" {
+			continue
+		}
+		endpointURL := fmt.Sprintf("%s/api/v1/channels/peer-sync", p.Endpoint)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewBuffer(data))
+		if err != nil {
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil && resp != nil {
+			_ = resp.Body.Close()
+		}
+	}
+}
+
 // [Ledger] syncPeerCredit broadcasts a credit update for an address to all peer endpoints over HTTP REST.
 func (s *Server) syncPeerCredit(addr crypto.Address, amount token.Amount) {
 	defer func() {
@@ -627,6 +693,7 @@ func (s *Server) handleOpenChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusCreated, ch)
+	go s.syncPeerChannelUpdate(ch)
 }
 
 type updateChannelReq struct {
@@ -660,6 +727,7 @@ func (s *Server) handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, ch)
+	go s.syncPeerChannelUpdate(ch)
 }
 
 type settleChannelReq struct {
@@ -702,6 +770,9 @@ func (s *Server) handleSettleChannel(w http.ResponseWriter, r *http.Request) {
 		"status":  "settlement_updated",
 		"channel": ch,
 	})
+	if ch != nil {
+		go s.syncPeerChannelUpdate(ch)
+	}
 }
 
 type challengeChannelReq struct {

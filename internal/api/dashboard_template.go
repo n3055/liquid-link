@@ -1990,7 +1990,15 @@ async function refreshOrderbookUI() {
 async function refreshChannelsUI() {
   try {
     const res = await fetchData('/api/v1/channels/list');
-    const channels = res.channels || [];
+    let channels = (res && res.channels) || [];
+    if (channels && channels.length > 0) {
+      localStorage.setItem('liquidlink_pcn_channels', JSON.stringify(channels));
+    } else {
+      const cached = localStorage.getItem('liquidlink_pcn_channels');
+      if (cached) {
+        try { channels = JSON.parse(cached); } catch (e) {}
+      }
+    }
     const countEl = document.getElementById('channelsCount');
     if (countEl) countEl.textContent = '(' + channels.length + ')';
 
