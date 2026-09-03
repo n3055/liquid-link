@@ -244,6 +244,16 @@ func TestStateChannelEndpoints(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK for initiate settlement, got %d: %s", rr.Code, rr.Body.String())
 	}
+
+	// 6. Peer sync channel
+	syncBody := []byte(fmt.Sprintf(`{"id":"peer-chan-100","state":"OPEN","sequence":5}`))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/channels/peer-sync", bytes.NewBuffer(syncBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for peer channel sync, got %d: %s", rr.Code, rr.Body.String())
+	}
 }
 
 func TestFiatBridgeEndpoints(t *testing.T) {
