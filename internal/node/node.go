@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"time"
 
 	"github.com/n3055/liquid-link/internal/api"
+	"github.com/n3055/liquid-link/internal/block"
 	"github.com/n3055/liquid-link/internal/blockchain"
 	"github.com/n3055/liquid-link/internal/config"
 	"github.com/n3055/liquid-link/internal/consensus"
@@ -36,6 +38,8 @@ type Node struct {
 	peerRegistry peer.Registry
 	wallet       wallet.Wallet
 	assetManager token.AssetManager
+	signer       crypto.Signer
+	stopChan     chan struct{}
 	apiServer    *api.Server
 	httpServer   *http.Server
 }
@@ -175,6 +179,8 @@ func NewNode(cfg *config.Config, logger *slog.Logger) (*Node, error) {
 		peerRegistry: peerReg,
 		wallet:       w,
 		assetManager: assetMgr,
+		signer:       signer,
+		stopChan:     make(chan struct{}),
 		apiServer:    apiSrv,
 		httpServer:   httpSrv,
 	}, nil
@@ -199,12 +205,19 @@ func (n *Node) Start(ctx context.Context) error {
 		}
 	}()
 
+	// [Consensus Block] Launch background automated block producer ticker loop
+	go n.startBlockProducer(ctx)
+
 	return nil
 }
 
 // Stop executes graceful termination of all active transports, DB hooks, and HTTP servers.
 func (n *Node) Stop(ctx context.Context) error {
 	n.logger.Info("stopping LiquidLink node")
+
+	if n.stopChan != nil {
+		close(n.stopChan)
+	}
 
 	// Shutdown HTTP Server
 	if err := n.httpServer.Shutdown(ctx); err != nil {
@@ -224,4 +237,55 @@ func (n *Node) Stop(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// [Consensus Block] startBlockProducer runs a background ticker loop proposing and committing blocks to the blockchain.
+func (n *Node) startBlockProducer(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	// 1. Ensure Genesis block exists on startup
+	tip, err := n.blockchain.CurrentBlock(ctx)
+	if err != nil || tip == nil {
+		genBlock := block.NewBlock(0, blockchain.GenesisPrevHash, nil, n.cfg.Node.ID)
+		sigHash := genBlock.SigningHash()
+		if n.signer != nil {
+			if sig, err := n.signer.Sign(sigHash[:]); err == nil {
+				genBlock.Header.Signature = sig
+			}
+		}
+		genBlock.Hash = genBlock.CalculateHash()
+		_ = n.blockchain.AddBlock(ctx, genBlock)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-n.stopChan:
+			return
+		case <-ticker.C:
+			currentTip, err := n.blockchain.CurrentBlock(ctx)
+			if err != nil || currentTip == nil {
+				continue
+			}
+
+			nextIndex := currentTip.Header.Index + 1
+			nextBlock := block.NewBlock(nextIndex, currentTip.Hash, nil, n.cfg.Node.ID)
+			sigHash := nextBlock.SigningHash()
+			if n.signer != nil {
+				sig, err := n.signer.Sign(sigHash[:])
+				if err != nil {
+					continue
+				}
+				nextBlock.Header.Signature = sig
+			}
+			nextBlock.Hash = nextBlock.CalculateHash()
+
+			// Validate with consensus engine and commit to blockchain
+			if _, err := n.consensus.ReceiveProposal(ctx, nextBlock); err == nil {
+				_ = n.blockchain.AddBlock(ctx, nextBlock)
+			}
+		}
+	}
 }
