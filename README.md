@@ -26,9 +26,11 @@ The project provides a **transport-agnostic payment network** capable of transfe
   - **LQD-Shares (LQS):** Equity tokens staked by users to capture protocol seigniorage interest payouts during expansion ($>\text{₹}1.00$).
   - **LQD-Bonds (LQB):** Discounted bonds issued during market contraction ($<\text{₹}1.00$). Users burn LQD to buy bonds and earn high interest yield when LQD restores peg.
 - **Transport Agnostic:** The exact same signed transaction can be transferred over any supported transport layer (HTTP, P2P, Bluetooth Mesh).
-- **Off-Chain State Channels (PCN):** Zero-latency bilateral state channels using co-signed state statements and dispute challenge windows.
-- **Crypto-to-Fiat Bridge:** UTR mapping, cryptographic receipt verification, and automated UPI payout gateway endpoints.
-- **Permissioned Validator Consensus:** Leader-based PBFT consensus engine with rotating validators and Ed25519 vote tallies.
+- **Off-Chain State Channels (PCN):** Zero-latency bilateral state channels using co-signed state statements, client-side `localStorage` caching, and dispute challenge windows.
+- **Crypto-to-Fiat Bridge:** Interactive UTR mapping verification, cryptographic receipt verification, INR balance pool transfer, and automated UPI payout gateway endpoints.
+- **Permissioned Validator Consensus:** Leader-based PBFT consensus engine with automated background block producer, rotating validators, and Ed25519 vote tallies.
+- **Bluetooth Mesh Offline Transactions:** Web Bluetooth API (`navigator.bluetooth`) scanning and offline transaction relaying over BLE mesh networking.
+- **Real-Time Seigniorage Visualizer:** Peg Equilibrium Progress Gauge (`#pegProgressBar`), live Staking APY yield calculator, and Bond redemption profit estimator.
 - **Persistent Key Storage:** Automatic node keypair persistence in local disk storage (`data/<node>/wallets/`).
 
 ---
@@ -91,9 +93,11 @@ Open your browser to test the interactive LiquidLink Console:
 - **Client-Side Non-Custodial Wallet:** Generate, import, or export Ed25519 private keys directly in your browser. All transactions are signed client-side before transmission.
 - **Dynamic Cartoon Identicons:** 100% unique, deterministic pixel art character avatars generated from wallet addresses.
 - **Real-Time Price & Peg Chart:** Interactive SVG price history chart tracking LQD vs ₹1.00 INR.
-- **Staking & Stability Dashboard:** Stake LQD-Shares to earn APY interest dividends, or buy/redeem LQD-Bonds during contraction/expansion.
-- **Payment Channel Network (PCN):** Open bilateral state channels, execute off-chain sequence updates, and settle on-chain with dispute challenge timelocks.
-- **Fiat Bridge & UPI Payout Simulation:** Generate UTR bridge requests, verify cryptographic receipts, and simulate automated UPI payout webhooks.
+- **Staking & Stability Dashboard:** Stake LQD-Shares to earn APY interest dividends, buy/redeem LQD-Bonds during contraction/expansion, and track the Seigniorage Peg Equilibrium Progress Gauge.
+- **Payment Channel Network (PCN):** Open bilateral state channels, execute off-chain sequence updates, sync states across peer nodes over P2P, and cache state statements in browser storage.
+- **Fiat Bridge & UPI Payout Simulation:** Generate interactive UTR bridge requests, verify receipts directly from UTR cards, and execute fiat INR pool transfers.
+- **Bluetooth Offline Payments:** Scan BLE mesh devices using Web Bluetooth API and relay offline signed transaction payloads over Bluetooth transport.
+- **Unified Activity Log:** Comprehensive real-time event feed aggregating block proposals, state channel sequence changes, fiat bridge settlements, and transfers.
 
 ---
 
@@ -111,6 +115,7 @@ Open your browser to test the interactive LiquidLink Console:
 | `/api/v1/channels/open` | POST | Open new state channel (`counterparty`, `amount`) |
 | `/api/v1/channels/update` | POST | Update off-chain state (`channel_id`, `amount`, `sending`) |
 | `/api/v1/channels/settle` | POST | Initiate/finalize channel settlement (`channel_id`, `action`) |
+| `/api/v1/channels/peer-sync` | POST | Inter-node state channel sequence co-signature sync |
 | `/api/v1/stability/status` | GET | Peg status, APY %, total staked shares, outstanding bonds |
 | `/api/v1/stability/history` | GET | Price history data vs INR |
 | `/api/v1/stability/stake` | POST | Stake LQD-Shares for interest yields |
@@ -120,6 +125,8 @@ Open your browser to test the interactive LiquidLink Console:
 | `/api/v1/bridge/utr/{utr}` | GET | Fetch UTR mapping details |
 | `/api/v1/bridge/verify-receipt` | POST | Verify receipt & settle request (`utr`, `receipt_id`) |
 | `/api/v1/bridge/upi-payout` | POST | Automated UPI payout gateway integration / simulation |
+| `/api/v1/transport/bluetooth/status` | GET | Query Bluetooth mesh transport configuration & active UUID |
+| `/api/v1/transport/broadcast-offline` | POST | Broadcast offline signed transaction payload over BLE mesh |
 
 ---
 
@@ -129,11 +136,17 @@ Open your browser to test the interactive LiquidLink Console:
 - [x] Persistent Ed25519 wallet key storage on disk.
 - [x] Inter-node peer balance credit synchronization.
 - [x] Deterministic pixel art cartoon identicon generator (MetaMask/Phantom style).
-- [ ] Client-side non-custodial browser wallet (Web Crypto API & client JS signing).
-- [ ] Algorithmic Seigniorage Stability Engine (`internal/stability`).
-- [ ] Staking yield APY calculation and bond discount/redemption logic.
-- [ ] Interactive SVG real-time price history chart in Web UI.
-- [ ] Live notification feed drawer for mints, transfers, yields, and bridge events.
+- [x] Client-side non-custodial browser wallet (Web Crypto API & client JS signing).
+- [x] Algorithmic Seigniorage Stability Engine (`internal/stability`).
+- [x] Staking yield APY calculation and bond discount/redemption logic.
+- [x] Interactive SVG real-time price history chart in Web UI.
+- [x] Live notification feed drawer for mints, transfers, yields, and bridge events.
+- [x] Automated consensus block producer ticker loop.
+- [x] Active P2P heartbeat discovery & peer status monitoring (`HTTPPingDiscovery`).
+- [x] Client-side off-chain state channel caching (`localStorage`) & peer co-sign sync.
+- [x] Interactive Fiat Bridge UTR verification & INR pool transfers.
+- [x] Web Bluetooth API integration & BLE mesh offline payload relaying.
+- [x] Real-time Seigniorage Peg Progress Gauge & bond/stake profit calculators.
 - [ ] Integration of real centralized UPI payout server SDK / Webhook payload verification.
 
 ---
