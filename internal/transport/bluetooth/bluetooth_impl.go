@@ -17,6 +17,12 @@ var (
 	ErrTransportClosed = errors.New("bluetooth transport is not active")
 )
 
+// Universal BLE Protocol Message Types
+const (
+	TypePCNOffline      = "pcn_offline_payment"
+	TypeDirectTxOffline = "direct_tx_offline"
+)
+
 // MeshTransport implements transport.Transport over Bluetooth Low Energy (BLE) Mesh.
 type MeshTransport struct {
 	cfg         *config.BluetoothConfig
@@ -25,6 +31,7 @@ type MeshTransport struct {
 	running     bool
 	seenPackets map[string]time.Time
 	peers       map[string]bool
+	queue       []*transport.Message
 }
 
 // NewMeshTransport instantiates a new BLE Mesh Transport driver.
@@ -33,6 +40,7 @@ func NewMeshTransport(cfg *config.BluetoothConfig) transport.Transport {
 		cfg:         cfg,
 		seenPackets: make(map[string]time.Time),
 		peers:       make(map[string]bool),
+		queue:       make([]*transport.Message, 0),
 	}
 }
 
@@ -117,6 +125,29 @@ func (t *MeshTransport) RegisterHandler(ctx context.Context, handler transport.H
 
 func (t *MeshTransport) Medium() transport.Medium {
 	return transport.MediumBluetooth
+}
+
+// [Bluetooth Transport] QueueMessage buffers an offline message for subsequent transmission.
+func (t *MeshTransport) QueueMessage(msg *transport.Message) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.queue = append(t.queue, msg)
+}
+
+// [Bluetooth Transport] GetQueuedMessages retrieves all buffered offline messages.
+func (t *MeshTransport) GetQueuedMessages() []*transport.Message {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	result := make([]*transport.Message, len(t.queue))
+	copy(result, t.queue)
+	return result
+}
+
+// [Bluetooth Transport] ClearQueue flushes the offline message queue.
+func (t *MeshTransport) ClearQueue() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.queue = make([]*transport.Message, 0)
 }
 
 func getPacketKey(msg *transport.Message) string {

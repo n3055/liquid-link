@@ -17,6 +17,11 @@ const (
 	StateClosed  ChannelState = "closed"
 )
 
+// Universal PCN Statement Types
+const (
+	TypePCNOffline = "pcn_offline_payment"
+)
+
 // Share represents the balance allocation of a payment channel between two participants.
 type Share struct {
 	PartyA        crypto.Address `json:"party_a"`
@@ -42,6 +47,20 @@ type Channel struct {
 	Signature []byte       `json:"signature"` // Co-signed state signature
 }
 
+// OfflineStateStatement represents a signed off-chain payment state statement transferred via Bluetooth or offline channels.
+type OfflineStateStatement struct {
+	Type      string         `json:"type,omitempty"`
+	ChannelID string         `json:"channel_id"`
+	Sequence  uint64         `json:"sequence"`
+	PartyA    crypto.Address `json:"party_a"`
+	PartyB    crypto.Address `json:"party_b"`
+	BalanceA  token.Amount   `json:"balance_a"`
+	BalanceB  token.Amount   `json:"balance_b"`
+	Sender    crypto.Address `json:"sender"`
+	Signature []byte         `json:"signature"`
+	PublicKey []byte         `json:"public_key"`
+}
+
 // Manager handles the lifecycle of payment channels.
 type Manager interface {
 	// OpenChannel locks collateral and establishes a payment channel.
@@ -49,6 +68,9 @@ type Manager interface {
 
 	// UpdateChannelState updates the balances of the channel, requiring mutual signatures.
 	UpdateChannelState(ctx context.Context, channelID string, amount token.Amount, sending bool) (*Channel, error)
+
+	// ApplyOfflineStateStatement validates and commits an off-chain co-signed state sequence update.
+	ApplyOfflineStateStatement(ctx context.Context, statement *OfflineStateStatement) (*Channel, error)
 
 	// InitiateSettlement starts the dispute/settlement period.
 	InitiateSettlement(ctx context.Context, channelID string) error

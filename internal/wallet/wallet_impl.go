@@ -56,6 +56,18 @@ func (w *localWallet) ExportPrivateKey() []byte {
 	return []byte(w.keyPair.PrivateKey)
 }
 
+// [Wallet] SignHash signs an arbitrary digest using the wallet's private key.
+func (w *localWallet) SignHash(hash []byte) ([]byte, error) {
+	if len(hash) == 0 {
+		return nil, errors.New("cannot sign empty hash")
+	}
+	signer, err := crypto.NewSigner(w.keyPair.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize signer: %w", err)
+	}
+	return signer.Sign(hash)
+}
+
 // SignTransaction signs a transaction payload using the wallet's private key.
 func (w *localWallet) SignTransaction(ctx context.Context, tx *transaction.Transaction) error {
 	if tx == nil {

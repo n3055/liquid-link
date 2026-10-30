@@ -93,6 +93,27 @@ func TestDashboardRendering(t *testing.T) {
 			if !strings.Contains(body, "totalSupplyConvertedVal") {
 				t.Errorf("expected totalSupplyConvertedVal element ID in dashboard body for %s", path)
 			}
+			if !strings.Contains(body, "sheetBluetooth") {
+				t.Errorf("expected sheetBluetooth modal container in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "subBlePair") {
+				t.Errorf("expected subBlePair tab in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "subBlePayment") {
+				t.Errorf("expected subBlePayment tab in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "subBleQueue") {
+				t.Errorf("expected subBleQueue tab in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "btnPushHost") {
+				t.Errorf("expected btnPushHost button in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "pairWebBluetooth") {
+				t.Errorf("expected pairWebBluetooth function in dashboard body for %s", path)
+			}
+			if !strings.Contains(body, "pushOfflineQueueToHost") {
+				t.Errorf("expected pushOfflineQueueToHost function in dashboard body for %s", path)
+			}
 		})
 	}
 }

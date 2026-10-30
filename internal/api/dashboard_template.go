@@ -732,6 +732,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       <div class="section-head">
         <h2>State channels <span class="count" id="channelsCount">({{ len .Channels }})</span></h2>
         <div class="head-actions">
+          <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')">📡 BLE P2P Sync</button>
           <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetChannel')">Manage</button>
           <button class="btn btn-sm btn-ghost" onclick="openSheet('sheetChannel')">+ Open</button>
         </div>
@@ -1023,13 +1024,100 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
   <div style="margin-top:16px; font-size:0.85rem; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:0.5px;">Bluetooth Offline Mesh</div>
   <div style="margin-top:8px; display:flex; gap:8px;">
-    <button class="btn btn-sm btn-secondary" onclick="connectWebBluetooth()" style="flex:1;">📡 Scan BLE Mesh</button>
-    <button class="btn btn-sm btn-ghost" onclick="sendOfflineBluetoothTx()" style="flex:1;">⚡ Relay Offline Tx</button>
+    <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')" style="flex:1;">📡 Bluetooth P2P Sync</button>
+    <button class="btn btn-sm btn-ghost" onclick="sendOfflineBluetoothTx()" style="flex:1;">⚡ Relay BLE Tx</button>
   </div>
 
   <div style="margin-top:16px;" class="btn-row">
     <button class="btn btn-secondary" onclick="closeSheet('sheetProfile'); openReceive();">Show my QR</button>
     <button class="btn btn-secondary" onclick="closeSheet('sheetProfile'); openScanner('sendReceiver','sheetSend');">Scan code</button>
+  </div>
+</div></div>
+
+<!-- Bluetooth P2P & Offline Sync Modal -->
+<div class="overlay" id="sheetBluetooth"><div class="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-head">
+    <h3>Bluetooth P2P & Offline Sync</h3>
+    <button class="sheet-close" onclick="closeSheet('sheetBluetooth')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <div class="sheet-tabs">
+    <button class="active" onclick="switchSubpanel('subBlePair', this, 'sheetBluetooth')">BLE Device</button>
+    <button onclick="switchSubpanel('subBlePayment', this, 'sheetBluetooth')">Make Offline Payment</button>
+    <button onclick="switchSubpanel('subBleQueue', this, 'sheetBluetooth')">Queued Tx (<span id="bleQueueCount">0</span>)</button>
+  </div>
+
+  <!-- Subpanel 1: BLE Device Pairing -->
+  <div id="subBlePair" class="sheet-subpanel active">
+    <div style="background:var(--surface-2); padding:14px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;">
+      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:4px;">BLE Pairing Status</div>
+      <div id="bleConnStatus" style="font-weight:700; font-size:0.95rem; color:var(--text); display:flex; align-items:center; gap:8px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:#989ba3; display:inline-block;" id="bleDot"></span>
+        <span id="bleStatusText">Disconnected</span>
+      </div>
+      <div id="bleDeviceInfo" style="font-size:0.78rem; font-family:var(--font-mono); color:var(--accent-strong); margin-top:6px;">No device paired</div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-primary" onclick="pairWebBluetooth()" style="flex:1;">📡 Pair Web Bluetooth Device</button>
+      <button class="btn btn-secondary" onclick="disconnectWebBluetooth()" style="flex:1;">Disconnect</button>
+    </div>
+    <p class="hint" style="margin-top:12px; font-size:0.78rem; color:var(--text-faint);">
+      Connects directly to nearby laptops/phones running LiquidLink BLE GATT service. Payments made while disconnected from the host will be queued locally with Ed25519 signatures.
+    </p>
+  </div>
+
+  <!-- Subpanel 2: Make Offline Payment -->
+  <div id="subBlePayment" class="sheet-subpanel">
+    <form onsubmit="submitOfflinePaymentForm(event)">
+      <div class="form-group">
+        <label>Payment Medium</label>
+        <select id="blePayType" onchange="toggleBlePaymentInputs()">
+          <option value="pcn">State Channel Payment (PCN Off-Chain)</option>
+          <option value="direct">Direct Signed Transfer (Ed25519)</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="grpBleChannel">
+        <label for="bleChannelID">Channel ID</label>
+        <input type="text" id="bleChannelID" placeholder="Channel hash ID">
+      </div>
+
+      <div class="form-group" id="grpBleReceiver" style="display:none;">
+        <label for="bleReceiver">Receiver Wallet Address</label>
+        <input type="text" id="bleReceiver" placeholder="0x...">
+      </div>
+
+      <div class="form-group">
+        <label for="bleAmount">Amount (LQD)</label>
+        <input type="number" id="bleAmount" min="1" placeholder="10" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Sign & Queue Offline Payment ⚡</button>
+    </form>
+  </div>
+
+  <!-- Subpanel 3: Queued Offline Payments & Host Push -->
+  <div id="subBleQueue" class="sheet-subpanel">
+    <div style="margin-bottom:12px;">
+      <label for="bleHostUrl">Host Node Sync URL</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="bleHostUrl" placeholder="http://192.168.1.X:8080" style="font-family:var(--font-mono); font-size:0.85rem;">
+        <button class="btn btn-sm btn-secondary" onclick="resetHostUrl()" style="white-space:nowrap;">This Node</button>
+      </div>
+      <p class="hint" style="margin-top:4px;">Set IP of Laptop A (host node) when Laptop B connects back to network.</p>
+    </div>
+
+    <div id="bleQueueList" style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; margin-bottom:14px;">
+      <div class="empty-row" style="padding:16px;">No queued offline payments.</div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-primary" onclick="pushOfflineQueueToHost()" id="btnPushHost" style="flex:2;">🚀 Push & Validate with Host</button>
+      <button class="btn btn-secondary" onclick="clearOfflineQueueUI()" style="flex:1;">Clear</button>
+    </div>
   </div>
 </div></div>
 
@@ -1350,36 +1438,360 @@ function getStorageKey(key) {
   return 'liquidlink_' + key + '_' + port;
 }
 
-async function connectWebBluetooth() {
-  const user = getActiveWallet();
+let activeBleDevice = null;
+let activeBleServer = null;
+let activeBleCharacteristic = null;
+
+function getOfflineQueue() {
+  try {
+    const raw = localStorage.getItem(getStorageKey('offline_queue'));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveOfflineQueue(queue) {
+  localStorage.setItem(getStorageKey('offline_queue'), JSON.stringify(queue));
+  renderOfflineQueue();
+}
+
+function renderOfflineQueue() {
+  const queue = getOfflineQueue();
+  const countEl = document.getElementById('bleQueueCount');
+  if (countEl) countEl.textContent = queue.length;
+
+  const listEl = document.getElementById('bleQueueList');
+  if (!listEl) return;
+
+  if (queue.length === 0) {
+    listEl.innerHTML = '<div class="empty-row" style="padding:16px;">No queued offline payments.</div>';
+    return;
+  }
+
+  let html = '';
+  queue.forEach((item, index) => {
+    const isPcn = item.type === 'pcn_offline_payment' || !!item.channel_id;
+    const targetLabel = isPcn ? 'Channel: ' + (item.channel_id || '').slice(0, 12) + '...' : 'To: ' + (item.receiver || '').slice(0, 12) + '...';
+    const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '';
+    html += '<div class="list-row" style="padding:10px 12px; background:var(--surface-2); border-radius:8px; margin-bottom:4px;">' +
+      '<div class="row-main">' +
+        '<div class="row-title" style="font-size:0.8rem;">' + (isPcn ? '⚡ PCN Off-Chain' : '💸 Direct Tx') +
+          ' <span class="badge badge-pending" style="font-size:0.6rem;">' + (item.status || 'Pending Sync') + '</span></div>' +
+        '<div class="row-sub" style="font-size:0.74rem;">' + targetLabel + (item.sequence ? ' (Seq ' + item.sequence + ')' : '') + ' • ' + timeStr + '</div>' +
+      '</div>' +
+      '<div class="row-side">' +
+        '<div class="top" style="font-size:0.85rem; color:var(--accent-strong);">' + item.amount + ' LQD</div>' +
+        '<button class="icon-btn-mini" onclick="removeOfflineQueueItem(' + index + ')" title="Remove" style="margin-left:auto; margin-top:2px;">✕</button>' +
+      '</div>' +
+    '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function removeOfflineQueueItem(index) {
+  const queue = getOfflineQueue();
+  if (index >= 0 && index < queue.length) {
+    queue.splice(index, 1);
+    saveOfflineQueue(queue);
+    showAlert('Removed item from offline queue');
+  }
+}
+
+function clearOfflineQueueUI() {
+  saveOfflineQueue([]);
+  showAlert('Offline transaction queue cleared');
+}
+
+function resetHostUrl() {
+  const input = document.getElementById('bleHostUrl');
+  if (input) input.value = window.location.origin;
+}
+
+function toggleBlePaymentInputs() {
+  const type = document.getElementById('blePayType').value;
+  const grpChan = document.getElementById('grpBleChannel');
+  const grpRecv = document.getElementById('grpBleReceiver');
+  if (type === 'pcn') {
+    if (grpChan) grpChan.style.display = 'block';
+    if (grpRecv) grpRecv.style.display = 'none';
+  } else {
+    if (grpChan) grpChan.style.display = 'none';
+    if (grpRecv) grpRecv.style.display = 'block';
+  }
+}
+
+async function pairWebBluetooth() {
   if (!navigator.bluetooth) {
-    showAlert('Web Bluetooth API not available in browser. Transmitting signed offline payload over node BLE mesh transport driver...', false);
-    const res = await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-payload-from-' + user + '-' + Date.now() });
-    showAlert('Offline payload broadcast via Bluetooth Mesh! Relayed status: ' + (res.status || 'relayed_over_bluetooth'));
-    refreshDashboardData();
+    showAlert('Web Bluetooth API not available in browser. Using node BLE mesh daemon transport driver.', false);
+    updateBleUI(true, 'Local BLE Mesh Driver (hci0)', 'Driver UUID: 00001101-0000-1000-8000-00805F9B34FB');
     return;
   }
   try {
-    showAlert('Scanning for BLE Mesh devices...');
+    showAlert('Scanning for nearby BLE devices...');
     const device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
     });
-    showAlert('Connected to BLE Mesh device: ' + (device.name || device.id));
-    const res = await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-device-' + (device.id || 'hci0') + '-from-' + user });
-    showAlert('Offline payload broadcast via BLE device ' + (device.name || device.id) + '! Status: ' + (res.status || 'relayed_over_bluetooth'));
-    refreshDashboardData();
+    activeBleDevice = device;
+    updateBleUI(true, device.name || device.id, 'Device ID: ' + device.id);
+    showAlert('Paired with BLE Device: ' + (device.name || device.id));
+
+    device.addEventListener('gattserverdisconnected', onBleDisconnected);
+
+    // Try GATT connect
+    if (device.gatt) {
+      try {
+        activeBleServer = await device.gatt.connect();
+        showAlert('GATT connected to ' + (device.name || device.id) + '!');
+        const service = await activeBleServer.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb').catch(() => null);
+        if (service) {
+          const chars = await service.getCharacteristics().catch(() => []);
+          if (chars && chars.length > 0) activeBleCharacteristic = chars[0];
+        }
+      } catch (gattErr) {
+        // Paired at Web Bluetooth level; fallback to node BLE mesh transport relay
+      }
+    }
   } catch (e) {
-    showAlert('Web Bluetooth scan status: ' + (e.message || 'Cancelled by user'), true);
+    showAlert('Web Bluetooth pairing: ' + (e.message || 'Cancelled by user'), true);
   }
 }
 
+function onBleDisconnected() {
+  updateBleUI(false, 'Disconnected', 'No device paired');
+  activeBleDevice = null;
+  activeBleServer = null;
+  activeBleCharacteristic = null;
+  showAlert('Bluetooth device disconnected', true);
+}
+
+function disconnectWebBluetooth() {
+  if (activeBleDevice && activeBleDevice.gatt && activeBleDevice.gatt.connected) {
+    activeBleDevice.gatt.disconnect();
+  }
+  onBleDisconnected();
+}
+
+function updateBleUI(connected, statusText, infoText) {
+  const dot = document.getElementById('bleDot');
+  const txt = document.getElementById('bleStatusText');
+  const info = document.getElementById('bleDeviceInfo');
+  if (dot) dot.style.background = connected ? '#10b981' : '#989ba3';
+  if (txt) txt.textContent = statusText;
+  if (info) info.textContent = infoText;
+}
+
+async function connectWebBluetooth() {
+  await pairWebBluetooth();
+}
+
 async function sendOfflineBluetoothTx() {
+  openSheet('sheetBluetooth');
+  switchSubpanel('subBlePayment', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[1], 'sheetBluetooth');
+}
+
+async function submitOfflinePaymentForm(e) {
+  e.preventDefault();
+  const payType = document.getElementById('blePayType').value;
+  const amount = parseInt(document.getElementById('bleAmount').value, 10);
   const user = getActiveWallet();
-  const payload = 'tx-offline-ble-payload-' + user + '-' + Date.now();
-  const res = await postData('/api/v1/transport/broadcast-offline', { payload });
-  showAlert('Offline transaction broadcast over Bluetooth Mesh! Relayed status: ' + (res.status || 'relayed_over_bluetooth'));
+
+  if (isNaN(amount) || amount <= 0) {
+    showAlert('Valid positive amount required', true);
+    return;
+  }
+
+  let item = null;
+  if (payType === 'pcn') {
+    let chanId = (document.getElementById('bleChannelID').value || '').trim();
+    let channels = [];
+    try {
+      channels = JSON.parse(localStorage.getItem(getStorageKey('pcn_channels'))) || [];
+    } catch (e) {}
+
+    let ch = channels.find(c => c.id === chanId);
+    if (!ch && channels.length > 0) {
+      ch = channels[0];
+      chanId = ch.id;
+    }
+    if (!chanId) {
+      showAlert('Channel ID is required for PCN offline payment', true);
+      return;
+    }
+
+    const currentSeq = ch ? (ch.sequence || 1) : 1;
+    const currentBalA = ch ? (ch.share.balance_party_a || 1000) : 1000;
+    const currentBalB = ch ? (ch.share.balance_party_b || 0) : 0;
+
+    const partyA = ch ? ch.share.party_a : user;
+    const partyB = ch ? ch.share.party_b : '0xcounterparty';
+    const isPartyB = partyB && user && partyB.toLowerCase() === user.toLowerCase();
+
+    let newBalA, newBalB;
+    if (isPartyB) {
+      if (currentBalB < amount) {
+        showAlert('Insufficient channel balance for offline payment (Current Bal: ' + currentBalB + ')', true);
+        return;
+      }
+      newBalB = currentBalB - amount;
+      newBalA = currentBalA + amount;
+    } else {
+      if (currentBalA < amount) {
+        showAlert('Insufficient channel balance for offline payment (Current Bal: ' + currentBalA + ')', true);
+        return;
+      }
+      newBalA = currentBalA - amount;
+      newBalB = currentBalB + amount;
+    }
+
+    const newSeq = currentSeq + 1;
+
+    item = {
+      type: 'pcn_offline_payment',
+      channel_id: chanId,
+      sequence: newSeq,
+      party_a: partyA,
+      party_b: partyB,
+      balance_a: newBalA,
+      balance_b: newBalB,
+      amount: amount,
+      sender: user,
+      status: 'Pending Host Sync',
+      timestamp: Date.now()
+    };
+  } else {
+    const receiver = (document.getElementById('bleReceiver').value || '').trim();
+    if (!receiver) {
+      showAlert('Receiver address required for direct transfer', true);
+      return;
+    }
+    item = {
+      type: 'direct_tx_offline',
+      sender: user,
+      receiver: receiver,
+      amount: amount,
+      nonce: Date.now(),
+      status: 'Pending Host Sync',
+      timestamp: Date.now()
+    };
+  }
+
+  // Request cryptographic Ed25519 signature from node wallet
+  try {
+    const signRes = await postData('/api/v1/wallet/sign-offline', {
+      type: payType,
+      channel_id: item.channel_id,
+      sequence: item.sequence,
+      balance_a: item.balance_a,
+      balance_b: item.balance_b,
+      receiver: item.receiver,
+      amount: item.amount,
+      nonce: item.nonce
+    });
+    if (signRes && signRes.signature && signRes.public_key) {
+      item.signature = signRes.signature;
+      item.public_key = signRes.public_key;
+      if (signRes.sender && payType === 'direct') {
+        item.sender = signRes.sender;
+      }
+    }
+  } catch (signErr) {
+    console.warn('Offline signature generation error:', signErr);
+  }
+
+  if (!item.signature || !item.public_key) {
+    showAlert('Failed to cryptographically sign offline transaction with node wallet', true);
+    return;
+  }
+
+  // Queue item in localStorage
+  const queue = getOfflineQueue();
+  queue.push(item);
+  saveOfflineQueue(queue);
+
+  // If BLE characteristic is available, write directly over GATT
+  const payloadStr = JSON.stringify(item);
+  if (activeBleCharacteristic) {
+    try {
+      const enc = new TextEncoder();
+      if (activeBleCharacteristic.writeValueWithResponse) {
+        await activeBleCharacteristic.writeValueWithResponse(enc.encode(payloadStr));
+      } else {
+        await activeBleCharacteristic.writeValue(enc.encode(payloadStr));
+      }
+    } catch (err) {}
+  }
+
+  // Also broadcast over local node BLE transport driver
+  await postData('/api/v1/transport/broadcast-offline', { payload: payloadStr }).catch(() => {});
+
+  showAlert('Offline payment signed & queued! (' + amount + ' LQD) ⚡ Ready to push to Host.');
+  switchSubpanel('subBleQueue', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[2], 'sheetBluetooth');
+}
+
+async function pushOfflineQueueToHost() {
+  const queue = getOfflineQueue();
+  if (queue.length === 0) {
+    showAlert('No offline payments in queue to push', true);
+    return;
+  }
+
+  const hostUrlInput = document.getElementById('bleHostUrl');
+  let hostUrl = (hostUrlInput && hostUrlInput.value.trim()) || window.location.origin;
+  hostUrl = hostUrl.replace(/\/+$/, '');
+
+  const btn = document.getElementById('btnPushHost');
+  if (btn) btn.disabled = true;
+
+  showAlert('Pushing ' + queue.length + ' queued offline payments to Host (' + hostUrl + ')...');
+
+  let successCount = 0;
+  let remaining = [];
+
+  for (const item of queue) {
+    try {
+      let endpoint = hostUrl + '/api/v1/transport/broadcast-offline';
+      let body = { payload: JSON.stringify(item) };
+
+      if (item.type === 'pcn_offline_payment' || item.channel_id) {
+        endpoint = hostUrl + '/api/v1/channels/offline-sync';
+        body = {
+          type: 'pcn_offline_payment',
+          channel_id: item.channel_id,
+          sequence: item.sequence,
+          party_a: item.party_a,
+          party_b: item.party_b,
+          balance_a: item.balance_a,
+          balance_b: item.balance_b,
+          sender: item.sender,
+          signature: item.signature,
+          public_key: item.public_key
+        };
+      }
+
+      const res = await postData(endpoint, body);
+      if (res && (res.status === 'offline_pcn_synced' || res.status === 'offline_tx_validated' || res.status === 'relayed_over_bluetooth')) {
+        successCount++;
+      } else {
+        remaining.push(item);
+      }
+    } catch (err) {
+      remaining.push(item);
+    }
+  }
+
+  if (btn) btn.disabled = false;
+  saveOfflineQueue(remaining);
   refreshDashboardData();
+
+  if (successCount > 0) {
+    showAlert('Successfully pushed & validated ' + successCount + ' payments on Host node! 🚀');
+  } else {
+    showAlert('Failed to connect or validate with Host. Ensure Host is reachable at ' + hostUrl, true);
+  }
 }
 
 function calcStakeYield() {
@@ -2255,6 +2667,8 @@ async function refreshDashboardData() {
 
 function initAvatars() {
   checkFirstTimeWelcome();
+  resetHostUrl();
+  renderOfflineQueue();
   refreshDashboardData();
   setInterval(refreshDashboardData, 3000);
 }

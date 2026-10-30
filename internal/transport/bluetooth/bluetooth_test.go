@@ -57,3 +57,40 @@ func TestBluetoothMeshTransport(t *testing.T) {
 		t.Fatalf("failed to stop bluetooth transport: %v", err)
 	}
 }
+
+func TestBluetoothOfflineQueue(t *testing.T) {
+	cfg := &config.BluetoothConfig{Enabled: true, DeviceID: "hci0"}
+	bt := bluetooth.NewMeshTransport(cfg)
+
+	meshTransport, ok := bt.(interface {
+		QueueMessage(msg *transport.Message)
+		GetQueuedMessages() []*transport.Message
+		ClearQueue()
+	})
+	if !ok {
+		t.Fatalf("expected MeshTransport to implement queue methods")
+	}
+
+	if len(meshTransport.GetQueuedMessages()) != 0 {
+		t.Errorf("expected empty queue, got %d", len(meshTransport.GetQueuedMessages()))
+	}
+
+	msg1 := &transport.Message{Type: bluetooth.TypePCNOffline, Payload: []byte("pcn-payload-1"), SenderID: "node-1"}
+	msg2 := &transport.Message{Type: bluetooth.TypeDirectTxOffline, Payload: []byte("tx-payload-2"), SenderID: "node-1"}
+
+	meshTransport.QueueMessage(msg1)
+	meshTransport.QueueMessage(msg2)
+
+	queued := meshTransport.GetQueuedMessages()
+	if len(queued) != 2 {
+		t.Fatalf("expected 2 queued messages, got %d", len(queued))
+	}
+	if queued[0].Type != bluetooth.TypePCNOffline {
+		t.Errorf("expected first message type %s, got %s", bluetooth.TypePCNOffline, queued[0].Type)
+	}
+
+	meshTransport.ClearQueue()
+	if len(meshTransport.GetQueuedMessages()) != 0 {
+		t.Errorf("expected queue cleared, got %d", len(meshTransport.GetQueuedMessages()))
+	}
+}
