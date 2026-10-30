@@ -18,6 +18,12 @@ build:
 	mkdir -p bin
 	$(GOBUILD) -o $(NODE_BINARY) ./cmd/node/main.go
 	$(GOBUILD) -o $(CLI_BINARY) ./cmd/cli/main.go
+	cp -f $(NODE_BINARY) bin/liquidlink
+
+build-all: build
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -ldflags="-s -w" -o bin/liquidlink-linux-amd64 ./cmd/node
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GOBUILD) -ldflags="-s -w" -o bin/liquidlink-linux-arm64 ./cmd/node
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GOBUILD) -ldflags="-s -w" -o bin/liquidlink-darwin-arm64 ./cmd/node
 
 run: build
 	./$(NODE_BINARY) --config configs/config.yaml

@@ -200,3 +200,31 @@ func TestFileRepository(t *testing.T) {
 func sha256Sum(data []byte) [32]byte {
 	return sha256.Sum256(data)
 }
+
+func TestWallet_SignHash(t *testing.T) {
+	w, err := GenerateWallet()
+	if err != nil {
+		t.Fatalf("failed to generate wallet: %v", err)
+	}
+
+	payload := []byte("arbitrary-digest-payload-to-sign")
+	h := sha256.Sum256(payload)
+
+	sig, err := w.SignHash(h[:])
+	if err != nil {
+		t.Fatalf("failed to sign hash: %v", err)
+	}
+	if len(sig) == 0 {
+		t.Fatalf("expected non-empty signature")
+	}
+
+	verifier := crypto.NewVerifier()
+	if !verifier.Verify(h[:], sig, w.ExportPublicKey()) {
+		t.Errorf("failed to verify signed hash against exported public key")
+	}
+
+	// Empty hash should return error
+	if _, err := w.SignHash(nil); err == nil {
+		t.Errorf("expected error signing empty hash, got nil")
+	}
+}

@@ -2,6 +2,9 @@ package pcn_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
+	"math"
 	"os"
 	"testing"
 
@@ -97,5 +100,133 @@ func TestPCN_ChannelLifecycleAndChallenge(t *testing.T) {
 	// 5. Finalize Settlement
 	if err := mgr.FinalizeSettlement(ctx, ch.ID); err != nil {
 		t.Fatalf("failed to finalize settlement: %v", err)
+	}
+}
+
+func TestPCN_ApplyOfflineStateStatement(t *testing.T) {
+	ctx := context.Background()
+	mgr, partyA, cleanup := setupTestPCNManager(t)
+	defer cleanup()
+
+	gen := crypto.NewGenerator()
+	kpB, _ := gen.GenerateKeyPair()
+	signerB, _ := crypto.NewSigner(kpB.PrivateKey)
+	partyB := gen.DeriveAddress(kpB.PublicKey)
+
+	// 1. Open Channel (1000 collateral)
+	ch, err := mgr.OpenChannel(ctx, partyB, 1000)
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+
+	// Create valid offline state statement signed by party B (Sequence 2, 700 / 300)
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", ch.ID, 2, 700, 300)))
+	sigB, err := signerB.Sign(hash[:])
+	if err != nil {
+		t.Fatalf("failed to sign offline state: %v", err)
+	}
+
+	validStmt := &pcn.OfflineStateStatement{
+		Type:      pcn.TypePCNOffline,
+		ChannelID: ch.ID,
+		Sequence:  2,
+		PartyA:    partyA,
+		PartyB:    partyB,
+		BalanceA:  700,
+		BalanceB:  300,
+		Sender:    partyB,
+		Signature: sigB,
+		PublicKey: []byte(kpB.PublicKey),
+	}
+
+	updatedCh, err := mgr.ApplyOfflineStateStatement(ctx, validStmt)
+	if err != nil {
+		t.Fatalf("failed to apply valid offline statement: %v", err)
+	}
+	if updatedCh.Sequence != 2 {
+		t.Errorf("expected sequence 2, got %d", updatedCh.Sequence)
+	}
+	if updatedCh.Share.BalancePartyA != 700 || updatedCh.Share.BalancePartyB != 300 {
+		t.Errorf("expected balances 700/300, got %d/%d", updatedCh.Share.BalancePartyA, updatedCh.Share.BalancePartyB)
+	}
+
+	// 2. Reject out-of-order sequence (Sequence 2 <= Current 2)
+	staleStmt := &pcn.OfflineStateStatement{
+		ChannelID: ch.ID,
+		Sequence:  2,
+		BalanceA:  700,
+		BalanceB:  300,
+		Signature: sigB,
+		PublicKey: []byte(kpB.PublicKey),
+	}
+	if _, err := mgr.ApplyOfflineStateStatement(ctx, staleStmt); err == nil {
+		t.Errorf("expected error applying stale sequence, got nil")
+	}
+
+	// 3. Reject balance invariant violation (Total 1100 != 1000)
+	invalidBalStmt := &pcn.OfflineStateStatement{
+		ChannelID: ch.ID,
+		Sequence:  3,
+		BalanceA:  800,
+		BalanceB:  300,
+		Signature: sigB,
+		PublicKey: []byte(kpB.PublicKey),
+	}
+	if _, err := mgr.ApplyOfflineStateStatement(ctx, invalidBalStmt); err == nil {
+		t.Errorf("expected error for balance conservation violation, got nil")
+	}
+
+	// 4. Reject integer overflow in balance calculation (MaxUint64 + 1001 wraps to 1000)
+	overflowStmt := &pcn.OfflineStateStatement{
+		ChannelID: ch.ID,
+		Sequence:  3,
+		BalanceA:  math.MaxUint64,
+		BalanceB:  1001,
+		Signature: sigB,
+		PublicKey: []byte(kpB.PublicKey),
+	}
+	if _, err := mgr.ApplyOfflineStateStatement(ctx, overflowStmt); err == nil {
+		t.Errorf("expected error for balance overflow attempt, got nil")
+	}
+
+	// 5. Reject missing signature / public key
+	missingSigStmt := &pcn.OfflineStateStatement{
+		ChannelID: ch.ID,
+		Sequence:  3,
+		BalanceA:  600,
+		BalanceB:  400,
+	}
+	if _, err := mgr.ApplyOfflineStateStatement(ctx, missingSigStmt); err == nil {
+		t.Errorf("expected error for missing signature, got nil")
+	}
+
+	// 6. Reject unauthorized third-party signer (keypair C not in channel)
+	kpC, _ := gen.GenerateKeyPair()
+	signerC, _ := crypto.NewSigner(kpC.PrivateKey)
+	hashC := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", ch.ID, 3, 600, 400)))
+	sigC, _ := signerC.Sign(hashC[:])
+	unauthStmt := &pcn.OfflineStateStatement{
+		ChannelID: ch.ID,
+		Sequence:  3,
+		BalanceA:  600,
+		BalanceB:  400,
+		Signature: sigC,
+		PublicKey: []byte(kpC.PublicKey),
+	}
+	if _, err := mgr.ApplyOfflineStateStatement(ctx, unauthStmt); err == nil {
+		t.Errorf("expected error for unauthorized third-party signer, got nil")
+	}
+
+	// 7. Reject invalid cryptographic signature
+	badSigStmt := &pcn.OfflineStateStatement{
+		ChannelID: ch.ID,
+		Sequence:  3,
+		BalanceA:  600,
+		BalanceB:  400,
+		Signature: []byte("invalid-fake-signature-bytes-64-byte-placeholder-for-test"),
+		PublicKey: []byte(kpB.PublicKey),
+	}
+	if _, err := mgr.ApplyOfflineStateStatement(ctx, badSigStmt); err == nil {
+		t.Errorf("expected error for invalid signature, got nil")
 	}
 }

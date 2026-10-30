@@ -216,6 +216,67 @@ func (m *managerImpl) UpdateChannelState(ctx context.Context, channelID string, 
 	return ch, nil
 }
 
+// [PCN State] ApplyOfflineStateStatement validates and commits an off-chain co-signed state sequence update.
+func (m *managerImpl) ApplyOfflineStateStatement(ctx context.Context, statement *OfflineStateStatement) (*Channel, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if statement == nil {
+		return nil, errors.New("nil offline state statement")
+	}
+	if statement.ChannelID == "" {
+		return nil, errors.New("channel id required in offline statement")
+	}
+
+	ch, err := m.registry.GetChannel(ctx, statement.ChannelID)
+	if err != nil {
+		return nil, err
+	}
+
+	if ch.State == StateClosed {
+		return nil, ErrInvalidState
+	}
+
+	if statement.Sequence <= ch.Sequence {
+		return nil, fmt.Errorf("offline sequence %d must be strictly higher than current sequence %d", statement.Sequence, ch.Sequence)
+	}
+
+	// Invariant: Balance conservation check with integer overflow protection
+	currentTotal := ch.Share.BalancePartyA + ch.Share.BalancePartyB
+	if statement.BalanceA > currentTotal || statement.BalanceB > currentTotal || statement.BalanceA+statement.BalanceB != currentTotal {
+		return nil, fmt.Errorf("balance invariant violated: statement balances %d/%d invalid for channel total %d", statement.BalanceA, statement.BalanceB, currentTotal)
+	}
+
+	// Mandatory cryptographic signature verification
+	if len(statement.PublicKey) == 0 || len(statement.Signature) == 0 {
+		return nil, errors.New("cryptographic signature and public key required on offline statement")
+	}
+
+	gen := crypto.NewGenerator()
+	signerAddr := gen.DeriveAddress(crypto.PublicKey(statement.PublicKey))
+	if signerAddr != ch.Share.PartyA && signerAddr != ch.Share.PartyB {
+		return nil, fmt.Errorf("signer %s is not an authorized channel participant (%s or %s)", signerAddr, ch.Share.PartyA, ch.Share.PartyB)
+	}
+
+	verifier := crypto.NewVerifier()
+	stateHash := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", statement.ChannelID, statement.Sequence, statement.BalanceA, statement.BalanceB)))
+	if !verifier.Verify(stateHash[:], statement.Signature, crypto.PublicKey(statement.PublicKey)) {
+		return nil, errors.New("invalid cryptographic signature on offline statement")
+	}
+
+	// Update channel state
+	ch.Sequence = statement.Sequence
+	ch.Share.BalancePartyA = statement.BalanceA
+	ch.Share.BalancePartyB = statement.BalanceB
+	ch.Signature = statement.Signature
+
+	if err := m.registry.RegisterChannel(ctx, ch); err != nil {
+		return nil, fmt.Errorf("failed to register updated channel: %w", err)
+	}
+
+	return ch, nil
+}
+
 func (m *managerImpl) InitiateSettlement(ctx context.Context, channelID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -21,6 +21,9 @@ type Wallet interface {
 
 	// ExportPublicKey exports the raw public key of the wallet.
 	ExportPublicKey() crypto.PublicKey
+
+	// SignHash signs an arbitrary digest using the wallet's private key.
+	SignHash(hash []byte) ([]byte, error)
 }
 
 // Repository defines the interface for local wallet persistence.

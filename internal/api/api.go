@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -115,6 +116,7 @@ func (s *Server) setupRoutes() {
 			wr.Post("/transfer", s.handleTransfer)
 			wr.Post("/mint", s.handleMint)
 			wr.Post("/credit-sync", s.handleCreditSync)
+			wr.Post("/sign-offline", s.handleSignOffline)
 		})
 
 		// Transaction broadcast
@@ -150,6 +152,7 @@ func (s *Server) setupRoutes() {
 			cr.Post("/settle", s.handleSettleChannel)
 			cr.Post("/challenge", s.handleChallengeChannel)
 			cr.Post("/peer-sync", s.handlePeerChannelSync)
+			cr.Post("/offline-sync", s.handleOfflineChannelSync)
 		})
 
 		// Transport actions
@@ -394,6 +397,13 @@ func (s *Server) handleBroadcastTx(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Verify address matches public key
+		gen := crypto.NewGenerator()
+		if gen.DeriveAddress(crypto.PublicKey(pubKeyBytes)) != crypto.Address(req.Sender) {
+			respondError(w, http.StatusBadRequest, "public key does not match sender address")
+			return
+		}
+
 		payload := fmt.Sprintf("%s|%s|%d|%d", req.Sender, req.Receiver, req.Amount, req.Nonce)
 		hash := sha256.Sum256([]byte(payload))
 
@@ -401,6 +411,15 @@ func (s *Server) handleBroadcastTx(w http.ResponseWriter, r *http.Request) {
 		if !verifier.Verify(hash[:], sigBytes, crypto.PublicKey(pubKeyBytes)) {
 			respondError(w, http.StatusBadRequest, "invalid transaction signature")
 			return
+		}
+
+		// Prevent replay if ledger is available
+		if s.ledger != nil {
+			state, err := s.ledger.GetAccountState(ctx, crypto.Address(req.Sender))
+			if err == nil && state != nil && req.Nonce <= state.Nonce {
+				respondError(w, http.StatusBadRequest, fmt.Sprintf("stale or replayed nonce: transaction has %d, current nonce is %d", req.Nonce, state.Nonce))
+				return
+			}
 		}
 	}
 
@@ -414,6 +433,15 @@ func (s *Server) handleBroadcastTx(w http.ResponseWriter, r *http.Request) {
 		_ = s.assetMgr.Credit(ctx, senderAddr, req.Amount)
 		respondError(w, http.StatusInternalServerError, "transfer credit failed: "+err.Error())
 		return
+	}
+
+	if s.ledger != nil && req.Nonce > 0 {
+		if repo, ok := s.ledger.(ledger.StateRepository); ok {
+			if state, err := s.ledger.GetAccountState(ctx, senderAddr); err == nil && state != nil {
+				state.Nonce = req.Nonce
+				_ = repo.SetAccountState(ctx, state)
+			}
+		}
 	}
 
 	txIDHash := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%d|%d", req.Sender, req.Receiver, req.Amount, req.Nonce)))
@@ -460,8 +488,92 @@ func (s *Server) handlePeerChannelSync(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// decodeBytesOrHex parses a JSON raw message into bytes supporting hex strings, base64 strings, or numeric byte arrays.
+func decodeBytesOrHex(raw json.RawMessage) []byte {
+	if len(raw) == 0 {
+		return nil
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err == nil {
+		if b, err := hex.DecodeString(str); err == nil && len(b) > 0 {
+			return b
+		}
+		if b, err := base64.StdEncoding.DecodeString(str); err == nil && len(b) > 0 {
+			return b
+		}
+		return []byte(str)
+	}
+	var b []byte
+	if err := json.Unmarshal(raw, &b); err == nil {
+		return b
+	}
+	return nil
+}
+
+// [PCN State] handleOfflineChannelSync receives and validates off-chain signed channel statements from offline peers.
+func (s *Server) handleOfflineChannelSync(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var raw struct {
+		Type      string          `json:"type,omitempty"`
+		ChannelID string          `json:"channel_id"`
+		Sequence  uint64          `json:"sequence"`
+		PartyA    crypto.Address  `json:"party_a"`
+		PartyB    crypto.Address  `json:"party_b"`
+		BalanceA  token.Amount    `json:"balance_a"`
+		BalanceB  token.Amount    `json:"balance_b"`
+		Sender    crypto.Address  `json:"sender"`
+		Signature json.RawMessage `json:"signature"`
+		PublicKey json.RawMessage `json:"public_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid offline statement body: "+err.Error())
+		return
+	}
+
+	if raw.ChannelID == "" {
+		respondError(w, http.StatusBadRequest, "channel_id required")
+		return
+	}
+
+	if s.pcn == nil {
+		respondError(w, http.StatusInternalServerError, "pcn manager uninitialized")
+		return
+	}
+
+	stmt := pcn.OfflineStateStatement{
+		Type:      raw.Type,
+		ChannelID: raw.ChannelID,
+		Sequence:  raw.Sequence,
+		PartyA:    raw.PartyA,
+		PartyB:    raw.PartyB,
+		BalanceA:  raw.BalanceA,
+		BalanceB:  raw.BalanceB,
+		Sender:    raw.Sender,
+		Signature: decodeBytesOrHex(raw.Signature),
+		PublicKey: decodeBytesOrHex(raw.PublicKey),
+	}
+
+	ch, err := s.pcn.ApplyOfflineStateStatement(ctx, &stmt)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "failed to apply offline channel statement: "+err.Error())
+		return
+	}
+
+	go s.syncPeerChannelUpdate(ch)
+
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":   "offline_pcn_synced",
+		"channel":  ch,
+		"sequence": ch.Sequence,
+		"node_id":  s.cfg.ID,
+	})
+}
+
 // [PCN State] syncPeerChannelUpdate broadcasts off-chain channel state updates to registered peer endpoints over HTTP REST.
 func (s *Server) syncPeerChannelUpdate(ch *pcn.Channel) {
+	defer func() {
+		_ = recover()
+	}()
 	if ch == nil || s.peers == nil {
 		return
 	}
@@ -956,8 +1068,9 @@ type bluetoothBroadcastReq struct {
 	Payload string `json:"payload"`
 }
 
-// [Transport] handleBluetoothBroadcast accepts and relays an offline signed transaction over Bluetooth.
+// [Transport] handleBluetoothBroadcast accepts, validates, and relays offline signed transactions over Bluetooth.
 func (s *Server) handleBluetoothBroadcast(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	var req bluetoothBroadcastReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -970,6 +1083,146 @@ func (s *Server) handleBluetoothBroadcast(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Inspect payload to check if it contains a structured signed statement
+	if strings.HasPrefix(payload, "{") && strings.HasSuffix(payload, "}") {
+		var envelope struct {
+			Type      string       `json:"type"`
+			ChannelID string       `json:"channel_id"`
+			Sequence  uint64       `json:"sequence"`
+			PartyA    string       `json:"party_a"`
+			PartyB    string       `json:"party_b"`
+			BalanceA  token.Amount `json:"balance_a"`
+			BalanceB  token.Amount `json:"balance_b"`
+			Sender    string       `json:"sender"`
+			Receiver  string       `json:"receiver"`
+			Amount    token.Amount `json:"amount"`
+			Nonce     uint64       `json:"nonce"`
+			Signature string       `json:"signature"`
+			PublicKey string       `json:"public_key"`
+		}
+
+		if err := json.Unmarshal([]byte(payload), &envelope); err == nil {
+			// Case 1: Offline PCN Payment Statement
+			if (envelope.Type == "pcn_offline_payment" || envelope.ChannelID != "") && s.pcn != nil {
+				sigBytes, errSig := hex.DecodeString(envelope.Signature)
+				pubBytes, errPub := hex.DecodeString(envelope.PublicKey)
+				if errSig != nil || errPub != nil || len(sigBytes) == 0 || len(pubBytes) == 0 {
+					respondError(w, http.StatusBadRequest, "valid hex signature and public key required for offline pcn payment")
+					return
+				}
+				stmt := pcn.OfflineStateStatement{
+					Type:      "pcn_offline_payment",
+					ChannelID: envelope.ChannelID,
+					Sequence:  envelope.Sequence,
+					PartyA:    crypto.Address(envelope.PartyA),
+					PartyB:    crypto.Address(envelope.PartyB),
+					BalanceA:  envelope.BalanceA,
+					BalanceB:  envelope.BalanceB,
+					Sender:    crypto.Address(envelope.Sender),
+					Signature: sigBytes,
+					PublicKey: pubBytes,
+				}
+
+				ch, err := s.pcn.ApplyOfflineStateStatement(ctx, &stmt)
+				if err != nil {
+					respondError(w, http.StatusBadRequest, "failed to apply offline channel statement: "+err.Error())
+					return
+				}
+
+				go s.syncPeerChannelUpdate(ch)
+				respondJSON(w, http.StatusOK, map[string]interface{}{
+					"status":     "offline_pcn_synced",
+					"channel_id": ch.ID,
+					"sequence":   ch.Sequence,
+					"medium":     "bluetooth_mesh",
+					"node_id":    s.cfg.ID,
+					"timestamp":  time.Now().Format(time.RFC3339),
+				})
+				return
+			}
+
+			// Case 2: Offline Direct Transfer Transaction
+			if envelope.Sender != "" && envelope.Receiver != "" && envelope.Amount > 0 && s.assetMgr != nil {
+				senderAddr := crypto.Address(envelope.Sender)
+				receiverAddr := crypto.Address(envelope.Receiver)
+
+				// Mandatory Ed25519 signature verification
+				if envelope.PublicKey == "" || envelope.Signature == "" {
+					respondError(w, http.StatusBadRequest, "public key and cryptographic signature required for offline transfer")
+					return
+				}
+
+				pubKeyBytes, err1 := hex.DecodeString(envelope.PublicKey)
+				sigBytes, err2 := hex.DecodeString(envelope.Signature)
+				if err1 != nil || err2 != nil || len(pubKeyBytes) == 0 || len(sigBytes) == 0 {
+					respondError(w, http.StatusBadRequest, "invalid hex format in public key or signature")
+					return
+				}
+
+				// Verify sender address derivation from public key
+				gen := crypto.NewGenerator()
+				if gen.DeriveAddress(crypto.PublicKey(pubKeyBytes)) != senderAddr {
+					respondError(w, http.StatusBadRequest, fmt.Sprintf("public key does not derive to sender address %s", senderAddr))
+					return
+				}
+
+				msgPayload := fmt.Sprintf("%s|%s|%d|%d", envelope.Sender, envelope.Receiver, envelope.Amount, envelope.Nonce)
+				hash := sha256.Sum256([]byte(msgPayload))
+				verifier := crypto.NewVerifier()
+				if !verifier.Verify(hash[:], sigBytes, crypto.PublicKey(pubKeyBytes)) {
+					respondError(w, http.StatusBadRequest, "invalid cryptographic signature on transaction")
+					return
+				}
+
+				// Nonce verification & replay attack prevention
+				if s.ledger != nil {
+					state, err := s.ledger.GetAccountState(ctx, senderAddr)
+					if err == nil && state != nil {
+						if envelope.Nonce <= state.Nonce {
+							respondError(w, http.StatusBadRequest, fmt.Sprintf("stale or replayed nonce: transaction nonce %d <= recorded nonce %d", envelope.Nonce, state.Nonce))
+							return
+						}
+					}
+				}
+
+				if err := s.assetMgr.Debit(ctx, senderAddr, envelope.Amount); err != nil {
+					respondError(w, http.StatusBadRequest, "transfer debit failed: "+err.Error())
+					return
+				}
+
+				if err := s.assetMgr.Credit(ctx, receiverAddr, envelope.Amount); err != nil {
+					_ = s.assetMgr.Credit(ctx, senderAddr, envelope.Amount)
+					respondError(w, http.StatusInternalServerError, "transfer credit failed: "+err.Error())
+					return
+				}
+
+				// Advance sender nonce in ledger state repository
+				if s.ledger != nil {
+					if repo, ok := s.ledger.(ledger.StateRepository); ok {
+						if state, err := s.ledger.GetAccountState(ctx, senderAddr); err == nil && state != nil {
+							state.Nonce = envelope.Nonce
+							_ = repo.SetAccountState(ctx, state)
+						}
+					}
+				}
+
+				go s.syncPeerCredit(receiverAddr, envelope.Amount)
+				respondJSON(w, http.StatusOK, map[string]interface{}{
+					"status":    "offline_tx_validated",
+					"sender":    envelope.Sender,
+					"receiver":  envelope.Receiver,
+					"amount":    envelope.Amount,
+					"nonce":     envelope.Nonce,
+					"medium":    "bluetooth_mesh",
+					"node_id":   s.cfg.ID,
+					"timestamp": time.Now().Format(time.RFC3339),
+				})
+				return
+			}
+		}
+	}
+
+	// Default fallback: relay offline payload over Bluetooth
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"status":    "relayed_over_bluetooth",
 		"medium":    "bluetooth_mesh",
@@ -1184,6 +1437,55 @@ func (s *Server) handleWalletCreate(w http.ResponseWriter, r *http.Request) {
 		"address":     string(addr),
 		"balance":     1000,
 		"inr_balance": 1000.00,
+	})
+}
+
+type signOfflineReq struct {
+	Type      string       `json:"type"` // "pcn" or "direct"
+	ChannelID string       `json:"channel_id"`
+	Sequence  uint64       `json:"sequence"`
+	BalanceA  token.Amount `json:"balance_a"`
+	BalanceB  token.Amount `json:"balance_b"`
+	Receiver  string       `json:"receiver"`
+	Amount    token.Amount `json:"amount"`
+	Nonce     uint64       `json:"nonce"`
+}
+
+// [Wallet] handleSignOffline signs an offline PCN state statement or direct transaction using the node's wallet.
+func (s *Server) handleSignOffline(w http.ResponseWriter, r *http.Request) {
+	if s.wallet == nil {
+		respondError(w, http.StatusInternalServerError, "wallet uninitialized")
+		return
+	}
+
+	var req signOfflineReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+
+	var hash [32]byte
+	if req.Type == "pcn" || req.ChannelID != "" {
+		msg := fmt.Sprintf("%s|%d|%d|%d", req.ChannelID, req.Sequence, req.BalanceA, req.BalanceB)
+		hash = sha256.Sum256([]byte(msg))
+	} else {
+		senderAddr := string(s.wallet.Address())
+		msg := fmt.Sprintf("%s|%s|%d|%d", senderAddr, req.Receiver, req.Amount, req.Nonce)
+		hash = sha256.Sum256([]byte(msg))
+	}
+
+	sig, err := s.wallet.SignHash(hash[:])
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to sign offline payload: "+err.Error())
+		return
+	}
+
+	pubKey := s.wallet.ExportPublicKey()
+	respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":     "signed",
+		"sender":     string(s.wallet.Address()),
+		"public_key": hex.EncodeToString(pubKey),
+		"signature":  hex.EncodeToString(sig),
 	})
 }
 
