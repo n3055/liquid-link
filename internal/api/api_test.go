@@ -262,15 +262,28 @@ func TestStateChannelEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 OK for peer channel sync, got %d: %s", rr.Code, rr.Body.String())
 	}
 
-	// 7. Offline sync channel statement
+	// 7. Offline sync channel statement: verify rejection if payee (party B) signs party A's reduction
+	forgedHash := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", chanID, 3, 120, 80)))
+	forgedSigB, _ := signerB.Sign(forgedHash[:])
+	forgedBody := []byte(fmt.Sprintf(`{"channel_id":"%s","sequence":3,"balance_a":120,"balance_b":80,"public_key":%q,"signature":%q}`,
+		chanID, hex.EncodeToString(kpB.PublicKey), hex.EncodeToString(forgedSigB)))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/channels/offline-sync", bytes.NewBuffer(forgedBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request when payee signs payer's reduction, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// 8. Offline sync channel statement: verify success when payer (party A) signs
 	hash := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", chanID, 3, 120, 80)))
-	sigB, err := signerB.Sign(hash[:])
+	sigA, err := s.wallet.SignHash(hash[:])
 	if err != nil {
 		t.Fatalf("failed to sign offline statement: %v", err)
 	}
 
 	offlineSyncBody := []byte(fmt.Sprintf(`{"channel_id":"%s","sequence":3,"balance_a":120,"balance_b":80,"public_key":%q,"signature":%q}`,
-		chanID, hex.EncodeToString(kpB.PublicKey), hex.EncodeToString(sigB)))
+		chanID, hex.EncodeToString(s.wallet.ExportPublicKey()), hex.EncodeToString(sigA)))
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/channels/offline-sync", bytes.NewBuffer(offlineSyncBody))
 	req.Header.Set("Content-Type", "application/json")
 	rr = httptest.NewRecorder()
@@ -351,7 +364,6 @@ func TestBluetoothEndpoints(t *testing.T) {
 	// 3. Broadcast offline structured PCN payment
 	gen := crypto.NewGenerator()
 	kpBle, _ := gen.GenerateKeyPair()
-	signerBle, _ := crypto.NewSigner(kpBle.PrivateKey)
 	bleAddr := gen.DeriveAddress(kpBle.PublicKey)
 
 	openReq := httptest.NewRequest(http.MethodPost, "/api/v1/channels/open", bytes.NewBuffer([]byte(fmt.Sprintf(`{"counterparty":"%s","amount":500}`, bleAddr))))
@@ -366,13 +378,13 @@ func TestBluetoothEndpoints(t *testing.T) {
 	chanID := chObj["id"].(string)
 
 	pcnHash := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", chanID, 2, 400, 100)))
-	pcnSig, err := signerBle.Sign(pcnHash[:])
+	pcnSig, err := s.wallet.SignHash(pcnHash[:])
 	if err != nil {
 		t.Fatalf("failed to sign pcn statement: %v", err)
 	}
 
 	pcnPayload := fmt.Sprintf(`{"type":"pcn_offline_payment","channel_id":"%s","sequence":2,"balance_a":400,"balance_b":100,"public_key":%q,"signature":%q}`,
-		chanID, hex.EncodeToString(kpBle.PublicKey), hex.EncodeToString(pcnSig))
+		chanID, hex.EncodeToString(s.wallet.ExportPublicKey()), hex.EncodeToString(pcnSig))
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/transport/broadcast-offline", bytes.NewBuffer([]byte(fmt.Sprintf(`{"payload":%q}`, pcnPayload))))
 	req.Header.Set("Content-Type", "application/json")
 	rr = httptest.NewRecorder()
@@ -646,9 +658,13 @@ func TestBroadcastTxEndpoint(t *testing.T) {
 	s, _, cleanup := setupTestServer(t)
 	defer cleanup()
 
+	cryptoGen := crypto.NewGenerator()
+	kpSender, _ := cryptoGen.GenerateKeyPair()
+	signerSender, _ := crypto.NewSigner(kpSender.PrivateKey)
+	senderAddr := cryptoGen.DeriveAddress(kpSender.PublicKey)
+
 	// Mint funds to sender
-	sender := "0xclient_sender"
-	mintPayload := []byte(fmt.Sprintf(`{"address":"%s","amount":1000}`, sender))
+	mintPayload := []byte(fmt.Sprintf(`{"address":"%s","amount":1000}`, senderAddr))
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/wallet/mint", bytes.NewBuffer(mintPayload))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
@@ -657,9 +673,29 @@ func TestBroadcastTxEndpoint(t *testing.T) {
 		t.Fatalf("failed to mint test funds: %s", rr.Body.String())
 	}
 
-	// Broadcast signed transaction
-	txPayload := []byte(fmt.Sprintf(`{"sender":"%s","receiver":"0xclient_receiver","amount":250,"nonce":1}`, sender))
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/tx/broadcast", bytes.NewBuffer(txPayload))
+	// 1. Rejection of unauthenticated broadcast (missing signature)
+	unsignedPayload := []byte(fmt.Sprintf(`{"sender":"%s","receiver":"0xclient_receiver","amount":250,"nonce":1}`, senderAddr))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/tx/broadcast", bytes.NewBuffer(unsignedPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for unsigned broadcast tx, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	// 2. Broadcast valid signed transaction
+	receiver := "0xclient_receiver"
+	nonceVal := uint64(1)
+	payloadMsg := fmt.Sprintf("%s|%s|%d|%d", senderAddr, receiver, 250, nonceVal)
+	hash := sha256.Sum256([]byte(payloadMsg))
+	sig, err := signerSender.Sign(hash[:])
+	if err != nil {
+		t.Fatalf("failed to sign tx: %v", err)
+	}
+
+	signedPayload := []byte(fmt.Sprintf(`{"sender":"%s","receiver":"%s","amount":250,"nonce":%d,"public_key":%q,"signature":%q}`,
+		senderAddr, receiver, nonceVal, hex.EncodeToString(kpSender.PublicKey), hex.EncodeToString(sig)))
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/tx/broadcast", bytes.NewBuffer(signedPayload))
 	req.Header.Set("Content-Type", "application/json")
 	rr = httptest.NewRecorder()
 	s.Handler().ServeHTTP(rr, req)

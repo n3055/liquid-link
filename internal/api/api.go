@@ -384,42 +384,45 @@ func (s *Server) handleBroadcastTx(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify cryptographic signature if provided
-	if req.PublicKey != "" && req.Signature != "" {
-		pubKeyBytes, err := hex.DecodeString(req.PublicKey)
-		if err != nil {
-			respondError(w, http.StatusBadRequest, "invalid public key format")
-			return
-		}
-		sigBytes, err := hex.DecodeString(req.Signature)
-		if err != nil {
-			respondError(w, http.StatusBadRequest, "invalid signature format")
-			return
-		}
+	// Mandatory cryptographic signature verification
+	if req.PublicKey == "" || req.Signature == "" {
+		respondError(w, http.StatusBadRequest, "public key and cryptographic signature required")
+		return
+	}
 
-		// Verify address matches public key
-		gen := crypto.NewGenerator()
-		if gen.DeriveAddress(crypto.PublicKey(pubKeyBytes)) != crypto.Address(req.Sender) {
-			respondError(w, http.StatusBadRequest, "public key does not match sender address")
+	pubKeyBytes, err := hex.DecodeString(req.PublicKey)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid public key format")
+		return
+	}
+	sigBytes, err := hex.DecodeString(req.Signature)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid signature format")
+		return
+	}
+
+	// Verify address matches public key
+	gen := crypto.NewGenerator()
+	if gen.DeriveAddress(crypto.PublicKey(pubKeyBytes)) != crypto.Address(req.Sender) {
+		respondError(w, http.StatusBadRequest, "public key does not match sender address")
+		return
+	}
+
+	payload := fmt.Sprintf("%s|%s|%d|%d", req.Sender, req.Receiver, req.Amount, req.Nonce)
+	hash := sha256.Sum256([]byte(payload))
+
+	verifier := crypto.NewVerifier()
+	if !verifier.Verify(hash[:], sigBytes, crypto.PublicKey(pubKeyBytes)) {
+		respondError(w, http.StatusBadRequest, "invalid transaction signature")
+		return
+	}
+
+	// Prevent replay if ledger is available
+	if s.ledger != nil {
+		state, err := s.ledger.GetAccountState(ctx, crypto.Address(req.Sender))
+		if err == nil && state != nil && req.Nonce <= state.Nonce {
+			respondError(w, http.StatusBadRequest, fmt.Sprintf("stale or replayed nonce: transaction has %d, current nonce is %d", req.Nonce, state.Nonce))
 			return
-		}
-
-		payload := fmt.Sprintf("%s|%s|%d|%d", req.Sender, req.Receiver, req.Amount, req.Nonce)
-		hash := sha256.Sum256([]byte(payload))
-
-		verifier := crypto.NewVerifier()
-		if !verifier.Verify(hash[:], sigBytes, crypto.PublicKey(pubKeyBytes)) {
-			respondError(w, http.StatusBadRequest, "invalid transaction signature")
-			return
-		}
-
-		// Prevent replay if ledger is available
-		if s.ledger != nil {
-			state, err := s.ledger.GetAccountState(ctx, crypto.Address(req.Sender))
-			if err == nil && state != nil && req.Nonce <= state.Nonce {
-				respondError(w, http.StatusBadRequest, fmt.Sprintf("stale or replayed nonce: transaction has %d, current nonce is %d", req.Nonce, state.Nonce))
-				return
-			}
 		}
 	}
 

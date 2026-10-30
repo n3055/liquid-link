@@ -1683,6 +1683,11 @@ async function submitOfflinePaymentForm(e) {
     console.warn('Offline signature generation error:', signErr);
   }
 
+  if (!item.signature || !item.public_key) {
+    showAlert('Failed to cryptographically sign offline transaction with node wallet', true);
+    return;
+  }
+
   // Queue item in localStorage
   const queue = getOfflineQueue();
   queue.push(item);

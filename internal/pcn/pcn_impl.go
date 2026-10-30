@@ -258,6 +258,14 @@ func (m *managerImpl) ApplyOfflineStateStatement(ctx context.Context, statement 
 		return nil, fmt.Errorf("signer %s is not an authorized channel participant (%s or %s)", signerAddr, ch.Share.PartyA, ch.Share.PartyB)
 	}
 
+	// Payer authorization invariant: the participant whose balance decreases must sign the deduction
+	if statement.BalanceA < ch.Share.BalancePartyA && signerAddr != ch.Share.PartyA {
+		return nil, fmt.Errorf("unauthorized balance reduction: party A (%s) balance decreases from %d to %d but statement is signed by %s", ch.Share.PartyA, ch.Share.BalancePartyA, statement.BalanceA, signerAddr)
+	}
+	if statement.BalanceB < ch.Share.BalancePartyB && signerAddr != ch.Share.PartyB {
+		return nil, fmt.Errorf("unauthorized balance reduction: party B (%s) balance decreases from %d to %d but statement is signed by %s", ch.Share.PartyB, ch.Share.BalancePartyB, statement.BalanceB, signerAddr)
+	}
+
 	verifier := crypto.NewVerifier()
 	stateHash := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", statement.ChannelID, statement.Sequence, statement.BalanceA, statement.BalanceB)))
 	if !verifier.Verify(stateHash[:], statement.Signature, crypto.PublicKey(statement.PublicKey)) {
