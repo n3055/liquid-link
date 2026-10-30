@@ -1626,16 +1626,35 @@ async function submitOfflinePaymentForm(e) {
     const currentBalA = ch ? (ch.share.balance_party_a || 1000) : 1000;
     const currentBalB = ch ? (ch.share.balance_party_b || 0) : 0;
 
+    const partyA = ch ? ch.share.party_a : user;
+    const partyB = ch ? ch.share.party_b : '0xcounterparty';
+    const isPartyB = partyB && user && partyB.toLowerCase() === user.toLowerCase();
+
+    let newBalA, newBalB;
+    if (isPartyB) {
+      if (currentBalB < amount) {
+        showAlert('Insufficient channel balance for offline payment (Current Bal: ' + currentBalB + ')', true);
+        return;
+      }
+      newBalB = currentBalB - amount;
+      newBalA = currentBalA + amount;
+    } else {
+      if (currentBalA < amount) {
+        showAlert('Insufficient channel balance for offline payment (Current Bal: ' + currentBalA + ')', true);
+        return;
+      }
+      newBalA = currentBalA - amount;
+      newBalB = currentBalB + amount;
+    }
+
     const newSeq = currentSeq + 1;
-    const newBalA = Math.max(0, currentBalA - amount);
-    const newBalB = currentBalB + amount;
 
     item = {
       type: 'pcn_offline_payment',
       channel_id: chanId,
       sequence: newSeq,
-      party_a: ch ? ch.share.party_a : user,
-      party_b: ch ? ch.share.party_b : '0xcounterparty',
+      party_a: partyA,
+      party_b: partyB,
       balance_a: newBalA,
       balance_b: newBalB,
       amount: amount,
