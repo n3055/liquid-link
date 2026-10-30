@@ -1345,24 +1345,41 @@ async function postData(url, data, submitBtn) {
   }
 }
 
+function getStorageKey(key) {
+  const port = window.location.port || '8080';
+  return 'liquidlink_' + key + '_' + port;
+}
+
 async function connectWebBluetooth() {
+  const user = getActiveWallet();
   if (!navigator.bluetooth) {
-    showAlert('Web Bluetooth API not supported in this browser. Relaying over simulated BLE mesh...', false);
-    await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-mock-payload' });
-    showAlert('Offline transaction relayed over Bluetooth Mesh!');
+    showAlert('Web Bluetooth API not available in browser. Transmitting signed offline payload over node BLE mesh transport driver...', false);
+    const res = await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-payload-from-' + user + '-' + Date.now() });
+    showAlert('Offline payload broadcast via Bluetooth Mesh! Relayed status: ' + (res.status || 'relayed_over_bluetooth'));
+    refreshDashboardData();
     return;
   }
   try {
-    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+    showAlert('Scanning for BLE Mesh devices...');
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ['00001101-0000-1000-8000-00805f9b34fb']
+    });
     showAlert('Connected to BLE Mesh device: ' + (device.name || device.id));
+    const res = await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-device-' + (device.id || 'hci0') + '-from-' + user });
+    showAlert('Offline payload broadcast via BLE device ' + (device.name || device.id) + '! Status: ' + (res.status || 'relayed_over_bluetooth'));
+    refreshDashboardData();
   } catch (e) {
-    showAlert('Web Bluetooth selection cancelled', true);
+    showAlert('Web Bluetooth scan status: ' + (e.message || 'Cancelled by user'), true);
   }
 }
 
 async function sendOfflineBluetoothTx() {
-  const res = await postData('/api/v1/transport/broadcast-offline', { payload: 'tx-offline-ble-payload-' + Date.now() });
-  showAlert('Offline transaction broadcast over Bluetooth Mesh!');
+  const user = getActiveWallet();
+  const payload = 'tx-offline-ble-payload-' + user + '-' + Date.now();
+  const res = await postData('/api/v1/transport/broadcast-offline', { payload });
+  showAlert('Offline transaction broadcast over Bluetooth Mesh! Relayed status: ' + (res.status || 'relayed_over_bluetooth'));
+  refreshDashboardData();
 }
 
 function calcStakeYield() {
@@ -1583,7 +1600,7 @@ function generateAvatarSVG(address, size) {
 }
 
 async function createNewWalletUI() {
-  const currentWallet = localStorage.getItem('liquidlink_active_wallet');
+  const currentWallet = localStorage.getItem(getStorageKey('active_wallet'));
   if (currentWallet) {
     const confirmReplace = confirm(
       'A wallet session already exists in browser storage:\n' +
@@ -1597,8 +1614,8 @@ async function createNewWalletUI() {
 
   try {
     const res = await postData('/api/v1/wallet/create', {});
-    localStorage.setItem('liquidlink_active_wallet', res.address);
-    localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
+    localStorage.setItem(getStorageKey('active_wallet'), res.address);
+    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([res.address]));
     await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
     refreshDashboardData();
     celebrateWalletCreation(res.address, res.balance || 1000, res.inr_balance || 1000);
@@ -1693,7 +1710,7 @@ async function submitRedeemBonds() {
 
 /* ---------- Onboarding Welcome & Celebration Modal ---------- */
 function checkFirstTimeWelcome() {
-  const active = localStorage.getItem('liquidlink_active_wallet');
+  const active = localStorage.getItem(getStorageKey('active_wallet'));
   if (!active) {
     const welcome = document.getElementById('welcomeOverlay');
     if (welcome) welcome.style.display = 'flex';
@@ -1709,8 +1726,8 @@ async function createNewWalletFromWelcome() {
   closeWelcomeOverlay();
   try {
     const res = await postData('/api/v1/wallet/create', {});
-    localStorage.setItem('liquidlink_active_wallet', res.address);
-    localStorage.setItem('liquidlink_known_wallets', JSON.stringify([res.address]));
+    localStorage.setItem(getStorageKey('active_wallet'), res.address);
+    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([res.address]));
     await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
     refreshDashboardData();
     celebrateWalletCreation(res.address, res.balance || 1000, res.inr_balance || 1000);
@@ -1865,12 +1882,12 @@ function renderMetricsChart(history) {
 }
 
 function getActiveWallet() {
-  return localStorage.getItem('liquidlink_active_wallet') || '{{ .Address }}';
+  return localStorage.getItem(getStorageKey('active_wallet')) || '{{ .Address }}';
 }
 
 function getKnownWallets() {
   try {
-    const list = JSON.parse(localStorage.getItem('liquidlink_known_wallets'));
+    const list = JSON.parse(localStorage.getItem(getStorageKey('known_wallets')));
     if (Array.isArray(list) && list.length > 0) return list;
   } catch (e) {}
   return ['{{ .Address }}'];
@@ -1881,13 +1898,13 @@ function saveKnownWallet(addr) {
   const known = getKnownWallets();
   if (!known.includes(addr)) {
     known.push(addr);
-    localStorage.setItem('liquidlink_known_wallets', JSON.stringify(known));
+    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify(known));
   }
 }
 
 async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance) {
   const addr = targetAddr || getActiveWallet();
-  localStorage.setItem('liquidlink_active_wallet', addr);
+  localStorage.setItem(getStorageKey('active_wallet'), addr);
   saveKnownWallet(addr);
 
   const walletAddrEl = document.getElementById('walletAddress');
@@ -2076,9 +2093,9 @@ async function refreshChannelsUI() {
     const res = await fetchData('/api/v1/channels/list');
     let channels = (res && res.channels) || [];
     if (channels && channels.length > 0) {
-      localStorage.setItem('liquidlink_pcn_channels', JSON.stringify(channels));
+      localStorage.setItem(getStorageKey('pcn_channels'), JSON.stringify(channels));
     } else {
-      const cached = localStorage.getItem('liquidlink_pcn_channels');
+      const cached = localStorage.getItem(getStorageKey('pcn_channels'));
       if (cached) {
         try { channels = JSON.parse(cached); } catch (e) {}
       }

@@ -974,6 +974,7 @@ func (s *Server) handleBluetoothBroadcast(w http.ResponseWriter, r *http.Request
 		"status":    "relayed_over_bluetooth",
 		"medium":    "bluetooth_mesh",
 		"timestamp": time.Now().Format(time.RFC3339),
+		"node_id":   s.cfg.ID,
 	})
 }
 
