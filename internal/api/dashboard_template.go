@@ -1179,11 +1179,13 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="subBleReceive" class="sheet-subpanel">
     <div style="background:var(--surface-2); padding:16px; border-radius:12px; border:1px solid var(--border); text-align:center;">
       <div style="font-size:0.95rem; font-weight:600; color:var(--text); margin-bottom:4px;">Scan Offline Payment</div>
-      <p class="hint" style="font-size:0.78rem; color:var(--text-dim); margin-bottom:12px;">Scan the payer's offline payment QR code to verify Ed25519 signature and credit channel balance with zero internet.</p>
+      <p class="hint" id="offlineScanHint" style="font-size:0.78rem; color:var(--text-dim); margin-bottom:12px;">Scan the payer's offline payment QR code to verify Ed25519 signature and credit channel balance with zero internet.</p>
       <div id="offlineScannerRegion" style="width:100%; max-width:260px; min-height:180px; margin:0 auto 12px; border-radius:12px; overflow:hidden; background:var(--surface);"></div>
+      <input type="file" id="offlineCameraDirect" accept="image/*" capture="environment" style="display:none;" onchange="handleOfflineQrImageUpload(this)">
       <div style="display:flex; gap:8px;">
-        <button type="button" class="btn btn-primary" onclick="startOfflinePaymentScan()" id="btnStartOfflineScan" style="flex:1;">Start Scanner</button>
+        <button type="button" class="btn btn-primary" onclick="startOfflinePaymentScan()" id="btnStartOfflineScan" style="flex:1;">Live Camera</button>
         <button type="button" class="btn btn-secondary" onclick="stopOfflinePaymentScan()" id="btnStopOfflineScan" style="flex:1; display:none;">Stop Camera</button>
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('offlineCameraDirect').click()" id="btnDirectOfflineSnap" style="flex:1;">Snap Camera</button>
       </div>
       <div style="margin-top:10px;">
         <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('offlineQrFileInput').click()" style="width:100%;">Upload QR Image File</button>
@@ -1310,6 +1312,9 @@ function openSheet(id) {
 }
 
 function closeSheet(id) {
+  if (id === 'sheetBluetooth') {
+    stopOfflinePaymentScan();
+  }
   const el = document.getElementById(id);
   if (el) {
     el.classList.remove('open');
@@ -1513,6 +1518,17 @@ async function openScanner(fillFieldId, thenOpenSheet) {
 }
 
 function onQrScanSuccess(decodedText) {
+  // Check if scanned QR is an offline payment payload
+  if (decodedText && (decodedText.startsWith('{') || decodedText.startsWith('%7B'))) {
+    try {
+      const parsed = JSON.parse(decodedText.startsWith('%7B') ? decodeURIComponent(decodedText) : decodedText);
+      if (parsed.signature && (parsed.channel_id || parsed.type === 'pcn_offline_payment' || parsed.type === 'direct_transfer')) {
+        closeSheetAndStopScan();
+        onOfflineQrScanSuccess(JSON.stringify(parsed));
+        return;
+      }
+    } catch (_) {}
+  }
   if (currentTargetField) {
     const field = document.getElementById(currentTargetField);
     if (field) field.value = decodedText;
@@ -2948,33 +2964,72 @@ let offlineQrScanner = null;
 async function startOfflinePaymentScan() {
   const btnStart = document.getElementById('btnStartOfflineScan');
   const btnStop = document.getElementById('btnStopOfflineScan');
+  const hint = document.getElementById('offlineScanHint');
   if (!window.Html5Qrcode) {
     showAlert('Camera scanner loading, please wait...', true);
     return;
   }
+
+  // Explicitly prompt for camera permission immediately on user interaction
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      stream.getTracks().forEach(t => t.stop());
+    } catch (pErr) {
+      console.warn('[Offline Camera] Permission request:', pErr);
+    }
+  }
+
   if (offlineQrScanner) {
     try { await offlineQrScanner.stop(); } catch(e) {}
     try { offlineQrScanner.clear(); } catch(e) {}
     offlineQrScanner = null;
   }
+
+  if (hint) hint.innerHTML = 'Starting camera stream... Please tap <b>Allow</b> if prompted.';
+
   offlineQrScanner = new Html5Qrcode('offlineScannerRegion');
+  const qrConfig = {
+    fps: 15,
+    qrbox: { width: 220, height: 220 },
+    aspectRatio: 1.0,
+    videoConstraints: { facingMode: { ideal: "environment" } }
+  };
+
   try {
     await offlineQrScanner.start(
-      { facingMode: { ideal: 'environment' } },
-      { fps: 15, qrbox: { width: 220, height: 220 } },
+      { facingMode: 'environment' },
+      qrConfig,
       onOfflineQrScanSuccess,
       () => {}
     );
     if (btnStart) btnStart.style.display = 'none';
     if (btnStop) btnStop.style.display = 'block';
+    if (hint) hint.innerHTML = 'Point camera at payer\'s QR code to verify.';
   } catch (err) {
-    showAlert('Could not start camera: ' + (err.message || 'Check camera permissions'), true);
+    console.warn('[Offline Camera] facingMode failed, falling back to camera enumeration:', err);
+    try {
+      const cameras = await Html5Qrcode.getCameras();
+      if (cameras && cameras.length > 0) {
+        const backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear')) || cameras[0];
+        await offlineQrScanner.start(backCamera.id, qrConfig, onOfflineQrScanSuccess, () => {});
+        if (btnStart) btnStart.style.display = 'none';
+        if (btnStop) btnStop.style.display = 'block';
+        if (hint) hint.innerHTML = 'Point camera at payer\'s QR code to verify.';
+        return;
+      }
+    } catch (camErr) {
+      console.warn('[Offline Camera] Camera list fallback failed:', camErr);
+    }
+    if (hint) hint.innerHTML = 'Live stream paused. Tap <b>"Snap Camera"</b> to capture photo directly!';
+    showAlert('Live camera paused. Tap "Snap Camera" to capture directly!', true);
   }
 }
 
 async function stopOfflinePaymentScan() {
   const btnStart = document.getElementById('btnStartOfflineScan');
   const btnStop = document.getElementById('btnStopOfflineScan');
+  const hint = document.getElementById('offlineScanHint');
   if (offlineQrScanner) {
     try { await offlineQrScanner.stop(); } catch(e) {}
     try { offlineQrScanner.clear(); } catch(e) {}
@@ -2982,6 +3037,7 @@ async function stopOfflinePaymentScan() {
   }
   if (btnStart) btnStart.style.display = 'block';
   if (btnStop) btnStop.style.display = 'none';
+  if (hint) hint.innerHTML = 'Scan the payer\'s offline payment QR code to verify Ed25519 signature and credit channel balance with zero internet.';
 }
 
 async function onOfflineQrScanSuccess(decodedText) {
@@ -3053,6 +3109,8 @@ async function onOfflineQrScanSuccess(decodedText) {
 function handleOfflineQrImageUpload(input) {
   if (!input.files || input.files.length === 0) return;
   const file = input.files[0];
+  const hint = document.getElementById('offlineScanHint');
+  if (hint) hint.textContent = 'Decoding QR image...';
   if (!window.Html5Qrcode) {
     showAlert('QR scanner loading, please wait...', true);
     return;
@@ -3061,10 +3119,13 @@ function handleOfflineQrImageUpload(input) {
   fileScanner.scanFile(file, true)
     .then(text => {
       fileScanner.clear();
+      input.value = '';
       onOfflineQrScanSuccess(text);
     })
     .catch(() => {
       fileScanner.clear();
+      input.value = '';
+      if (hint) hint.innerHTML = 'Could not detect a valid QR code in that photo. Please try again.';
       showAlert('No valid offline payment QR code found in image', true);
     });
 }
