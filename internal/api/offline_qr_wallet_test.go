@@ -55,6 +55,205 @@ func TestOfflineQR_DetectionRecognizesDirectAndPCNTypes(t *testing.T) {
 	}
 }
 
+// [Receipt Verification] TestOfflineQR_ReceiveOfflineModalHelperDefined verifies that
+// the dedicated openReceiveOfflineModal helper and Receive Offline buttons exist on the dashboard.
+func TestOfflineQR_ReceiveOfflineModalHelperDefined(t *testing.T) {
+	server, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	dashReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	dashRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(dashRecorder, dashReq)
+	body := dashRecorder.Body.String()
+
+	if !strings.Contains(body, "function openReceiveOfflineModal(") {
+		t.Fatalf("expected dashboard_template.go to define 'function openReceiveOfflineModal('")
+	}
+	if !strings.Contains(body, "openReceiveOfflineModal()") {
+		t.Fatalf("expected dashboard_template.go to have a button calling openReceiveOfflineModal()")
+	}
+}
+
+// [Receipt Verification] TestOfflineQR_PCNReceiveSequencePreservation verifies that
+// receiving a PCN offline payment with higher sequence is preserved and not overwritten
+// by stale sequence responses from the node server during periodic polling.
+func TestOfflineQR_PCNReceiveSequencePreservation(t *testing.T) {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node executable not found in PATH; skipping Node.js runtime verification")
+	}
+
+	server, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	dashReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	dashRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(dashRecorder, dashReq)
+	body := dashRecorder.Body.String()
+
+	startTag := "<script>"
+	endTag := "</script>"
+	startIdx := strings.Index(body, startTag)
+	endIdx := strings.LastIndex(body, endTag)
+	if startIdx == -1 || endIdx == -1 {
+		t.Fatalf("could not locate <script> block in rendered dashboard body")
+	}
+
+	jsCode := body[startIdx+len(startTag) : endIdx]
+	templateTagRe := regexp.MustCompile(`\{\{[^}]+\}\}`)
+	cleanJs := templateTagRe.ReplaceAllString(jsCode, `"mock_template_value"`)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 keypair: %v", err)
+	}
+	pubHex := hex.EncodeToString(pub)
+	senderAddr := "0x" + hex.EncodeToString(pub[:20])
+	receiverAddr := "0x2222333344445555666677778888999900001111"
+
+	chanID := "chan_seq_preservation_test"
+	pcnMsg := fmt.Sprintf("%s|2|850|150", chanID)
+	pcnHash := sha256.Sum256([]byte(pcnMsg))
+	pcnSig := hex.EncodeToString(ed25519.Sign(priv, pcnHash[:]))
+
+	nodeHarness := fmt.Sprintf(`
+const localStorageStore = {};
+global.localStorage = {
+  getItem: (k) => localStorageStore[k] || null,
+  setItem: (k, v) => { localStorageStore[k] = String(v); },
+  removeItem: (k) => { delete localStorageStore[k]; },
+  clear: () => { for (const k in localStorageStore) delete localStorageStore[k]; }
+};
+
+const elements = {};
+global.document = {
+  getElementById: (id) => {
+    if (!elements[id]) {
+      elements[id] = {
+        id: id,
+        value: '',
+        textContent: '',
+        innerHTML: '',
+        style: {},
+        classList: { add: () => {}, remove: () => {}, contains: () => false },
+        querySelectorAll: () => [],
+        appendChild: () => {}
+      };
+    }
+    return elements[id];
+  },
+  createElement: (tag) => ({ tag, style: {}, appendChild: () => {} }),
+  querySelectorAll: () => [],
+  addEventListener: () => {}
+};
+global.window = {
+  localStorage: global.localStorage,
+  document: global.document,
+  location: { port: '8080', hostname: 'localhost' },
+  requestAnimationFrame: (cb) => cb(),
+  addEventListener: () => {},
+  crypto: { getRandomValues: (buf) => require('crypto').randomFillSync(buf) }
+};
+global.requestAnimationFrame = global.window.requestAnimationFrame;
+global.navigator = { userAgent: 'node-test', vibrate: () => true };
+global.showAlert = () => {};
+global.refreshDashboardData = () => {};
+global.switchSubpanel = () => {};
+global.closeSheetAndStopScan = () => {};
+global.openSheet = () => {};
+
+// Mock fetch to simulate node returning stale sequence 1
+global.fetch = async (url) => {
+  return {
+    ok: true,
+    json: async () => ({
+      channels: [{
+        id: '%s',
+        state: 'OPEN',
+        sequence: 1,
+        share: {
+          party_a: '%s',
+          party_b: '%s',
+          balance_party_a: 1000,
+          balance_party_b: 0
+        }
+      }]
+    })
+  };
+};
+
+%s
+
+localStorage.setItem(getStorageKey('active_wallet'), '%s');
+
+(async () => {
+  // 1. Initial state: receiver has channel at sequence 1
+  saveWalletChannels('%s', [{
+    id: '%s',
+    state: 'OPEN',
+    sequence: 1,
+    share: {
+      party_a: '%s',
+      party_b: '%s',
+      balance_party_a: 1000,
+      balance_party_b: 0
+    }
+  }]);
+
+  // 2. Receiver scans PCN offline payment with sequence 2
+  const pcnPayload = JSON.stringify({
+    type: 'pcn_offline_payment',
+    channel_id: '%s',
+    sequence: 2,
+    party_a: '%s',
+    party_b: '%s',
+    balance_a: 850,
+    balance_b: 150,
+    amount: 150,
+    signature: '%s',
+    public_key: '%s'
+  });
+  await onOfflineQrScanSuccess(pcnPayload);
+
+  // 3. Simulate periodic background refreshChannelsUI (which fetches from server)
+  await refreshChannelsUI();
+
+  // 4. Invariant: Local sequence 2 must NOT be downgraded to sequence 1!
+  const chs = getCachedWalletChannels('%s');
+  const ch = chs.find(c => c.id === '%s');
+  if (!ch) throw new Error("Channel missing from cache");
+  if (ch.sequence !== 2) {
+    throw new Error("Channel sequence was downgraded from 2 to " + ch.sequence);
+  }
+  const balB = ch.share ? ch.share.balance_party_b : ch.balance_b;
+  if (balB !== 150) {
+    throw new Error("Receiver balance was reverted to " + balB + ", expected 150");
+  }
+  console.log("Sequence preservation verified successfully!");
+})().catch(err => {
+  console.error("Preservation failure:", err);
+  process.exit(1);
+});
+`, chanID, senderAddr, receiverAddr, cleanJs, receiverAddr, receiverAddr, chanID, senderAddr, receiverAddr, chanID, senderAddr, receiverAddr, pcnSig, pubHex, receiverAddr, chanID)
+
+	tmpFile, err := os.CreateTemp("", "offline_pcn_preservation_*.js")
+	if err != nil {
+		t.Fatalf("failed to create temporary file for node test: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(nodeHarness); err != nil {
+		t.Fatalf("failed to write test harness to temporary file: %v", err)
+	}
+	_ = tmpFile.Close()
+
+	cmd := exec.Command(nodePath, tmpFile.Name())
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Node.js PCN sequence preservation failed:\n%s", string(output))
+	}
+}
+
 // [Receipt Verification] TestOfflineQR_NodeJSRuntimeVerification executes the client-side
 // offline QR receiving flow and saveWalletOfflineQueue inside Node.js to verify end-to-end
 // execution without runtime exceptions (ReferenceError, TypeError, digest failure).

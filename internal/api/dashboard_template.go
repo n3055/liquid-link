@@ -797,6 +797,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       <div class="section-head">
         <h2>State channels <span class="count" id="channelsCount">({{ len .Channels }})</span></h2>
         <div class="head-actions">
+          <button class="btn btn-sm btn-secondary" onclick="openReceiveOfflineModal()">Receive Offline</button>
           <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')">Offline P2P Sync</button>
           <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetChannel')">Manage</button>
           <button class="btn btn-sm btn-ghost" onclick="openSheet('sheetChannel')">+ Open</button>
@@ -2016,11 +2017,11 @@ async function submitOfflinePaymentForm(e) {
     }
 
     const currentSeq = ch ? (ch.sequence || 1) : 1;
-    const currentBalA = ch ? (ch.share.balance_party_a || 1000) : 1000;
-    const currentBalB = ch ? (ch.share.balance_party_b || 0) : 0;
+    const currentBalA = ch ? ((ch.share && ch.share.balance_party_a !== undefined) ? ch.share.balance_party_a : ((ch.share && ch.share.BalancePartyA !== undefined) ? ch.share.BalancePartyA : (ch.balance_a !== undefined ? ch.balance_a : 0))) : 0;
+    const currentBalB = ch ? ((ch.share && ch.share.balance_party_b !== undefined) ? ch.share.balance_party_b : ((ch.share && ch.share.BalancePartyB !== undefined) ? ch.share.BalancePartyB : (ch.balance_b !== undefined ? ch.balance_b : 0))) : 0;
 
-    const partyA = ch ? ch.share.party_a : user;
-    const partyB = ch ? ch.share.party_b : '0xcounterparty';
+    const partyA = ch ? ((ch.share && (ch.share.party_a || ch.share.PartyA)) || ch.party_a || user) : user;
+    const partyB = ch ? ((ch.share && (ch.share.party_b || ch.share.PartyB)) || ch.party_b || '') : '';
     const isPartyB = partyB && user && partyB.toLowerCase() === user.toLowerCase();
 
     let newBalA, newBalB;
@@ -3059,7 +3060,10 @@ function renderChannelsList(channels) {
         '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:3px;">' +
           '<div class="top" style="color:var(--text); font-weight:700;">' + balA + ' / ' + balB + ' LQD</div>' +
           '<div class="bottom" style="font-size:0.72rem; color:var(--text-dim);">Sequence ' + (ch.sequence || 1) + '</div>' +
-          '<button type="button" class="btn btn-sm btn-ghost" onclick="openOfflinePaymentForChannel(\'' + ch.id + '\')" style="margin-top:4px; padding:3px 9px; font-size:0.72rem;">Pay Offline</button>' +
+          '<div style="display:flex; gap:4px; margin-top:4px;">' +
+            '<button type="button" class="btn btn-sm btn-ghost" onclick="openOfflinePaymentForChannel(\'' + ch.id + '\')" style="padding:3px 8px; font-size:0.72rem;">Pay Offline</button>' +
+            '<button type="button" class="btn btn-sm btn-secondary" onclick="openReceiveOfflineModal()" style="padding:3px 8px; font-size:0.72rem;">Receive Offline</button>' +
+          '</div>' +
         '</div></div>';
     });
     container.innerHTML = html;
@@ -3109,6 +3113,41 @@ async function refreshChannelsUI() {
       const u = activeWallet.toLowerCase();
       return partyA === u || partyB === u;
     });
+
+    // Merge with locally cached channels so offline updates with higher sequences are preserved
+    const cached = getCachedWalletChannels(activeWallet);
+    if (cached && cached.length > 0) {
+      cached.forEach(locCh => {
+        const srvIdx = channels.findIndex(c => c.id === locCh.id);
+        if (srvIdx >= 0) {
+          if ((locCh.sequence || 0) > (channels[srvIdx].sequence || 0)) {
+            channels[srvIdx] = locCh;
+          }
+        } else {
+          channels.push(locCh);
+        }
+      });
+    }
+
+    // Also overlay any pending offline PCN payments in the outbox queue
+    const queue = getOfflineQueue();
+    if (queue && queue.length > 0) {
+      queue.forEach(qItem => {
+        if ((qItem.type === 'pcn_offline_payment' || qItem.channel_id) && qItem.channel_id) {
+          const ch = channels.find(c => c.id === qItem.channel_id);
+          if (ch && (qItem.sequence || 0) >= (ch.sequence || 0)) {
+            ch.sequence = qItem.sequence;
+            if (ch.share) {
+              ch.share.balance_party_a = Number(qItem.balance_a);
+              ch.share.balance_party_b = Number(qItem.balance_b);
+            }
+            ch.balance_a = Number(qItem.balance_a);
+            ch.balance_b = Number(qItem.balance_b);
+          }
+        }
+      });
+    }
+
     saveWalletChannels(activeWallet, channels);
   } catch (err) {
     channels = getCachedWalletChannels(activeWallet);
@@ -3487,6 +3526,16 @@ async function onOfflineQrScanSuccess(decodedText) {
       saveOfflineQueue(queue);
     }
 
+    // Attempt automatic broadcast to host if network reachable
+    try {
+      const payloadStr = typeof decodedText === 'string' ? decodedText : JSON.stringify(item);
+      const bRes = await postData('/api/v1/transport/broadcast-offline', { payload: payloadStr });
+      if (bRes && (bRes.status === 'offline_pcn_synced' || bRes.status === 'offline_tx_validated')) {
+        item.status = 'Synced to Host';
+        saveOfflineQueue(queue);
+      }
+    } catch (_) {}
+
     showAlert('Verified offline payment received! +' + item.amount + ' LQD' + (item.sequence ? ' (Seq ' + item.sequence + ')' : ''));
     refreshDashboardData();
     const sheetBt = document.getElementById('sheetBluetooth');
@@ -3575,6 +3624,14 @@ function toggleCustomSettleChan() {
   } else {
     custom.style.display = 'none';
     if (btn) btn.textContent = '+ Custom ID';
+  }
+}
+
+function openReceiveOfflineModal() {
+  openSheet('sheetBluetooth');
+  const tabs = document.querySelectorAll('#sheetBluetooth .sheet-tabs button');
+  if (tabs && tabs[1]) {
+    switchSubpanel('subBleReceive', tabs[1], 'sheetBluetooth');
   }
 }
 
