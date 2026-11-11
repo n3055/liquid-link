@@ -353,11 +353,11 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
 /* Scanner */
 .scan-frame { position: relative; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 1/1; margin-bottom: 14px; min-height: 260px; }
-#scannerRegion { width: 100% !important; height: 100% !important; min-height: 260px; display: flex; align-items: center; justify-content: center; }
-#scannerRegion video { width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 16px; display: block !important; }
-#scannerRegion canvas { display: none !important; }
-#scannerRegion img { width: 100% !important; height: 100% !important; object-fit: contain !important; }
-.scan-frame::after { content: ""; position: absolute; inset: 14%; border: 1.5px solid rgba(255,255,255,0.6); border-radius: 16px; box-shadow: 0 0 0 999px rgba(0,0,0,0.4); pointer-events: none; }
+#scannerRegion, #offlineScannerRegion { width: 100% !important; height: 100% !important; min-height: 260px; display: flex; align-items: center; justify-content: center; }
+#scannerRegion video, #offlineScannerRegion video { width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 16px; display: block !important; }
+#scannerRegion canvas, #offlineScannerRegion canvas { display: none !important; }
+#scannerRegion img, #offlineScannerRegion img { width: 100% !important; height: 100% !important; object-fit: contain !important; }
+.scan-frame::after { content: ""; position: absolute; inset: 10%; border: 2px solid rgba(56,189,248,0.85); border-radius: 16px; box-shadow: 0 0 0 999px rgba(0,0,0,0.45); pointer-events: none; }
 
 /* Profile drawer */
 .profile-avatar-lg { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); border: 2px solid var(--border); overflow: hidden; }
@@ -1180,7 +1180,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
     <div style="background:var(--surface-2); padding:16px; border-radius:12px; border:1px solid var(--border); text-align:center;">
       <div style="font-size:0.95rem; font-weight:600; color:var(--text); margin-bottom:4px;">Scan Offline Payment</div>
       <p class="hint" id="offlineScanHint" style="font-size:0.78rem; color:var(--text-dim); margin-bottom:12px;">Scan the payer's offline payment QR code to verify Ed25519 signature and credit channel balance with zero internet.</p>
-      <div id="offlineScannerRegion" style="width:100%; max-width:260px; min-height:180px; margin:0 auto 12px; border-radius:12px; overflow:hidden; background:var(--surface);"></div>
+      <div class="scan-frame" style="width:100%; max-width:280px; margin:0 auto 14px;"><div id="offlineScannerRegion"></div></div>
       <input type="file" id="offlineCameraDirect" accept="image/*" capture="environment" style="display:none;" onchange="handleOfflineQrImageUpload(this)">
       <div style="display:flex; gap:8px;">
         <button type="button" class="btn btn-primary" onclick="startOfflinePaymentScan()" id="btnStartOfflineScan" style="flex:1;">Live Camera</button>
@@ -1483,12 +1483,23 @@ async function openScanner(fillFieldId, thenOpenSheet) {
 
   if (hint) hint.innerHTML = 'Starting camera stream... Please tap <b>Allow</b> if prompted.';
 
-  html5QrScanner = new Html5Qrcode('scannerRegion');
+  html5QrScanner = new Html5Qrcode('scannerRegion', {
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
+
   const qrConfig = {
-    fps: 15,
-    qrbox: { width: 220, height: 220 },
-    aspectRatio: 1.0,
-    videoConstraints: { facingMode: { ideal: "environment" } }
+    fps: 10,
+    qrbox: function(w, h) {
+      const minEdge = Math.min(w, h);
+      const edge = Math.max(160, Math.floor(minEdge * 0.85));
+      return { width: edge, height: edge };
+    },
+    videoConstraints: {
+      facingMode: { ideal: "environment" },
+      width: { min: 640, ideal: 1280 },
+      height: { min: 480, ideal: 720 }
+    }
   };
 
   try {
@@ -1544,12 +1555,22 @@ function handleQrImageUpload(input) {
   const hint = document.getElementById('scanHint');
   hint.textContent = 'Decoding QR image...';
 
+  // Stop live scanner if currently running
+  if (html5QrScanner) {
+    try { await html5QrScanner.stop(); } catch (_) {}
+    try { html5QrScanner.clear(); } catch (_) {}
+    html5QrScanner = null;
+  }
+
   if (!window.Html5Qrcode) {
     showAlert('QR scanner engine not ready', true);
     return;
   }
 
-  const fileScanner = new Html5Qrcode('scannerRegion');
+  const fileScanner = new Html5Qrcode('scannerRegion', {
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
   fileScanner.scanFile(file, true)
     .then(decodedText => {
       fileScanner.clear();
@@ -2935,14 +2956,34 @@ function renderOfflinePaymentQr(item) {
   if (!card || !canvas) return;
 
   canvas.innerHTML = '';
-  const payloadStr = JSON.stringify(item);
+  // Build clean minimal wire payload
+  const cleanItem = {
+    type: item.type,
+    channel_id: item.channel_id,
+    sequence: item.sequence,
+    party_a: item.party_a,
+    party_b: item.party_b,
+    balance_a: item.balance_a,
+    balance_b: item.balance_b,
+    amount: item.amount,
+    sender: item.sender,
+    receiver: item.receiver,
+    nonce: item.nonce,
+    signature: item.signature,
+    public_key: item.public_key
+  };
+  const payloadStr = JSON.stringify(cleanItem);
+
+  // Dynamic high-visibility responsive QR canvas size
+  const qrSize = Math.min(280, Math.max(220, window.innerWidth - 80));
+
   new QRCode(canvas, {
     text: payloadStr,
-    width: 210,
-    height: 210,
-    colorDark: "#090d16",
+    width: qrSize,
+    height: qrSize,
+    colorDark: "#000000",
     colorLight: "#ffffff",
-    correctLevel: QRCode.CorrectLevel.M
+    correctLevel: QRCode.CorrectLevel.L
   });
 
   const isPcn = item.type === 'pcn_offline_payment' || !!item.channel_id;
@@ -2952,6 +2993,7 @@ function renderOfflinePaymentQr(item) {
       : 'Direct Transfer: ' + item.amount + ' LQD to ' + (item.receiver || '').slice(0, 10) + '...';
   }
   card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function dismissOfflinePaymentQr() {
@@ -2960,6 +3002,7 @@ function dismissOfflinePaymentQr() {
 }
 
 let offlineQrScanner = null;
+let isProcessingOfflineQr = false;
 
 async function startOfflinePaymentScan() {
   const btnStart = document.getElementById('btnStartOfflineScan');
@@ -2986,26 +3029,39 @@ async function startOfflinePaymentScan() {
     offlineQrScanner = null;
   }
 
-  if (hint) hint.innerHTML = 'Starting camera stream... Please tap <b>Allow</b> if prompted.';
+  if (hint) hint.innerHTML = 'Starting camera stream... Point at payer QR code.';
 
-  offlineQrScanner = new Html5Qrcode('offlineScannerRegion');
+  offlineQrScanner = new Html5Qrcode('offlineScannerRegion', {
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined,
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
+  });
+
   const qrConfig = {
-    fps: 15,
-    qrbox: { width: 220, height: 220 },
-    aspectRatio: 1.0,
-    videoConstraints: { facingMode: { ideal: "environment" } }
+    fps: 10,
+    qrbox: function(w, h) {
+      const minEdge = Math.min(w, h);
+      const edge = Math.max(160, Math.floor(minEdge * 0.85));
+      return { width: edge, height: edge };
+    },
+    videoConstraints: {
+      facingMode: { ideal: "environment" },
+      width: { min: 640, ideal: 1280 },
+      height: { min: 480, ideal: 720 }
+    }
   };
 
   try {
     await offlineQrScanner.start(
-      { facingMode: 'environment' },
+      { facingMode: { ideal: 'environment' } },
       qrConfig,
       onOfflineQrScanSuccess,
       () => {}
     );
     if (btnStart) btnStart.style.display = 'none';
     if (btnStop) btnStop.style.display = 'block';
-    if (hint) hint.innerHTML = 'Point camera at payer\'s QR code to verify.';
+    if (hint) hint.innerHTML = 'Point camera at payer QR code to verify.';
   } catch (err) {
     console.warn('[Offline Camera] facingMode failed, falling back to camera enumeration:', err);
     try {
@@ -3015,7 +3071,7 @@ async function startOfflinePaymentScan() {
         await offlineQrScanner.start(backCamera.id, qrConfig, onOfflineQrScanSuccess, () => {});
         if (btnStart) btnStart.style.display = 'none';
         if (btnStop) btnStop.style.display = 'block';
-        if (hint) hint.innerHTML = 'Point camera at payer\'s QR code to verify.';
+        if (hint) hint.innerHTML = 'Point camera at payer QR code to verify.';
         return;
       }
     } catch (camErr) {
@@ -3041,9 +3097,16 @@ async function stopOfflinePaymentScan() {
 }
 
 async function onOfflineQrScanSuccess(decodedText) {
+  if (isProcessingOfflineQr) return;
+  isProcessingOfflineQr = true;
+  if (navigator.vibrate) {
+    try { navigator.vibrate(120); } catch (_) {}
+  }
   stopOfflinePaymentScan();
   try {
-    const item = JSON.parse(decodedText);
+    let raw = (decodedText || '').trim();
+    if (raw.startsWith('%7B')) raw = decodeURIComponent(raw);
+    const item = JSON.parse(raw);
     if (!item || !item.signature || !item.public_key) {
       showAlert('Invalid offline payment QR code', true);
       return;
@@ -3103,19 +3166,32 @@ async function onOfflineQrScanSuccess(decodedText) {
     switchSubpanel('subBleQueue', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[3], 'sheetBluetooth');
   } catch (err) {
     showAlert('Failed to process offline payment: ' + (err.message || 'Invalid format'), true);
+  } finally {
+    isProcessingOfflineQr = false;
   }
 }
 
-function handleOfflineQrImageUpload(input) {
+async function handleOfflineQrImageUpload(input) {
   if (!input.files || input.files.length === 0) return;
   const file = input.files[0];
   const hint = document.getElementById('offlineScanHint');
   if (hint) hint.textContent = 'Decoding QR image...';
+
+  // Stop live scanner if currently running
+  if (offlineQrScanner) {
+    try { await offlineQrScanner.stop(); } catch (_) {}
+    try { offlineQrScanner.clear(); } catch (_) {}
+    offlineQrScanner = null;
+  }
+
   if (!window.Html5Qrcode) {
     showAlert('QR scanner loading, please wait...', true);
     return;
   }
-  const fileScanner = new Html5Qrcode('offlineScannerRegion');
+  const fileScanner = new Html5Qrcode('offlineScannerRegion', {
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
   fileScanner.scanFile(file, true)
     .then(text => {
       fileScanner.clear();
@@ -3128,6 +3204,7 @@ function handleOfflineQrImageUpload(input) {
       if (hint) hint.innerHTML = 'Could not detect a valid QR code in that photo. Please try again.';
       showAlert('No valid offline payment QR code found in image', true);
     });
+}
 }
 
 
