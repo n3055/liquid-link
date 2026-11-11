@@ -62,15 +62,23 @@ const dashboardHTML = `<!DOCTYPE html>
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace;
   --nav-h: 68px;
 }
-* { box-sizing: border-box; }
-html, body { height: 100%; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html {
+  height: 100%;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+}
 body {
+  height: 100%;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
   font-family: var(--font-body);
-  margin: 0;
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
-  padding-bottom: calc(var(--nav-h) + 60px);
+  padding-bottom: calc(var(--nav-h) + 80px + env(safe-area-inset-bottom));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -190,7 +198,14 @@ svg { display: block; }
 .avatar-btn svg { width: 100% !important; height: 100% !important; border-radius: 50% !important; display: block !important; }
 
 /* ---------- Layout ---------- */
-.container { max-width: 560px; margin: 0 auto; padding: 18px 18px 6px; }
+.container {
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding: 16px 16px calc(var(--nav-h) + 60px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
 
 /* ---------- Hero balance card ---------- */
 .hero { position: relative; border-radius: var(--radius-lg); margin-bottom: 18px; border: 1px solid var(--border); background: var(--surface); }
@@ -218,8 +233,33 @@ svg { display: block; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 600; color: var(--success); }
 
 /* ---------- Segmented control ---------- */
-.segment { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px; padding: 4px; margin-bottom: 14px; }
-.segment button { flex: 1; border: none; background: none; padding: 9px 6px; border-radius: 9px; font-size: 0.82rem; font-weight: 600; color: var(--text-dim); cursor: pointer; }
+.segment {
+  display: flex;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+.segment::-webkit-scrollbar { display: none; }
+.segment button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  border: none;
+  background: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
 .segment button.active { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 
 .panel { display: none; }
@@ -280,7 +320,19 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .overlay { position: fixed; inset: 0; background: rgba(4,5,8,0.65); backdrop-filter: blur(3px); z-index: 100; display: none; align-items: flex-end; justify-content: center; }
 .overlay.open { display: flex; }
 @media (min-width: 620px) { .overlay { align-items: center; } }
-.sheet { background: var(--bg-elevated); border: 1px solid var(--border); width: 100%; max-width: 480px; border-radius: 22px 22px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); max-height: 88vh; overflow-y: auto; animation: rise 0.22s ease; }
+.sheet {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 500px;
+  border-radius: 22px 22px 0 0;
+  padding: 20px 20px calc(48px + env(safe-area-inset-bottom));
+  max-height: 86vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  animation: rise 0.22s ease;
+}
 @media (min-width: 620px) { .sheet { border-radius: 22px; margin: 16px; } }
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 4px; margin: 0 auto 14px; }
@@ -898,12 +950,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 <!-- Scan -->
 <div class="overlay" id="sheetScan"><div class="sheet">
   <div class="sheet-handle"></div>
-  <div class="sheet-head"><h3>Scan a code</h3><button type="button" class="sheet-close" onclick="closeSheetAndStopScan(event)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div class="sheet-head"><h3>Scan QR Code</h3><button type="button" class="sheet-close" onclick="closeSheetAndStopScan(event)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <div class="scan-frame"><div id="scannerRegion"></div></div>
-  <div class="hint" id="scanHint">Point the camera at a LiquidLink QR code or choose a photo below.</div>
+  <div class="hint" id="scanHint" style="margin-top:10px;">Point camera at a LiquidLink QR code or snap with device camera.</div>
+  <input type="file" id="qrCameraDirect" accept="image/*" capture="environment" style="display:none;" onchange="handleQrImageUpload(this)">
   <input type="file" id="qrFileInput" accept="image/*" style="display:none;" onchange="handleQrImageUpload(this)">
-  <div class="btn-row" style="margin-top:10px;">
-    <button type="button" class="btn btn-secondary" onclick="document.getElementById('qrFileInput').click()">Upload QR Image</button>
+  <div class="btn-row" style="margin-top:14px; gap:8px;">
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('qrCameraDirect').click()" style="flex:1;">Snap Camera</button>
+    <button type="button" class="btn btn-secondary" onclick="document.getElementById('qrFileInput').click()" style="flex:1;">Upload Image</button>
   </div>
 </div></div>
 
@@ -954,8 +1008,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="subUpdate" class="sheet-subpanel">
     <form onsubmit="submitUpdateChannel(event)">
       <div class="form-group">
-        <label for="chanIdUpdate">Channel ID</label>
-        <input type="text" id="chanIdUpdate" placeholder="chan-..." required>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label for="chanIdUpdate" style="margin:0;">Select Channel to Update</label>
+          <button type="button" onclick="toggleCustomUpdateChan()" id="btnToggleCustomUpdate" style="font-size:0.75rem; color:var(--accent); background:none; border:none; cursor:pointer;">+ Custom ID</button>
+        </div>
+        <select id="chanIdUpdate" style="width:100%; padding:10px 12px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+          <option value="">-- Choose active channel --</option>
+        </select>
+        <input type="text" id="chanIdUpdateCustom" placeholder="Channel hash ID" style="display:none; margin-top:8px;">
       </div>
       <div class="form-group">
         <label for="chanUpdateAmt">Amount</label>
@@ -974,8 +1034,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
   <div id="subSettle" class="sheet-subpanel">
     <div class="form-group">
-      <label for="chanIdSettle">Channel ID</label>
-      <input type="text" id="chanIdSettle" placeholder="chan-..." required>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <label for="chanIdSettle" style="margin:0;">Select Channel to Settle</label>
+        <button type="button" onclick="toggleCustomSettleChan()" id="btnToggleCustomSettle" style="font-size:0.75rem; color:var(--accent); background:none; border:none; cursor:pointer;">+ Custom ID</button>
+      </div>
+      <select id="chanIdSettle" style="width:100%; padding:10px 12px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <option value="">-- Choose active channel --</option>
+      </select>
+      <input type="text" id="chanIdSettleCustom" placeholder="Channel hash ID" style="display:none; margin-top:8px;">
     </div>
     <div class="btn-row" style="flex-wrap:wrap; gap:8px;">
       <button class="btn btn-secondary" onclick="submitSettleChannel('initiate')" style="flex:1;">Initiate</button>
@@ -1076,8 +1142,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       </div>
 
       <div class="form-group" id="grpBleChannel">
-        <label for="bleChannelID">Channel ID</label>
-        <input type="text" id="bleChannelID" placeholder="Channel hash ID">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label for="bleChannelID" style="margin:0;">Select State Channel</label>
+          <button type="button" onclick="toggleCustomChannelInput()" id="btnToggleCustomChan" style="font-size:0.75rem; color:var(--accent); background:none; border:none; cursor:pointer;">+ Custom ID</button>
+        </div>
+        <select id="bleChannelID" style="width:100%; padding:10px 12px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+          <option value="">-- Choose active channel --</option>
+        </select>
+        <input type="text" id="bleChannelCustomID" placeholder="Paste custom channel hash" style="display:none; margin-top:8px;">
       </div>
 
       <div class="form-group" id="grpBleReceiver" style="display:none;">
@@ -1373,12 +1445,6 @@ async function openScanner(fillFieldId, thenOpenSheet) {
   openSheet('sheetScan');
   
   const hint = document.getElementById('scanHint');
-  const isSecure = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  
-  if (!window.Html5Qrcode) {
-    hint.innerHTML = ' Scanner engine loading. Tap <b>"Upload QR Image"</b> below to pick a photo!';
-    return;
-  }
 
   // Safely stop & clear any previous scanner instance
   if (html5QrScanner) {
@@ -1388,17 +1454,29 @@ async function openScanner(fillFieldId, thenOpenSheet) {
     try { prev.clear(); } catch(e) {}
   }
 
-  // Check MediaDevices API
+  // Explicitly prompt for camera permission immediately on user interaction
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      stream.getTracks().forEach(t => t.stop());
+    } catch (pErr) {
+      console.warn('[Camera] Permission request:', pErr);
+    }
+  }
+
+  if (!window.Html5Qrcode) {
+    if (hint) hint.innerHTML = 'Camera engine loading... Tap <b>"Snap Camera"</b> below!';
+    return;
+  }
+
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    if (!isSecure) {
-      hint.innerHTML = ' <b>HTTP Context Notice:</b> Mobile browsers disable live webcams over plain HTTP (<code>http://10.89.63.191</code>).<br><br><b>Solutions:</b><br>1. Tap <b>"Upload QR Image"</b> below to pick/snap a photo.<br>2. Or enable HTTP camera in Chrome flags: <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.';
-    } else {
-      hint.innerHTML = ' Live camera API not supported by browser. Tap <b>"Upload QR Image"</b> below!';
+    if (hint) {
+      hint.innerHTML = '<b>Plain HTTP Note:</b> Mobile browsers restrict live webcam streaming over insecure HTTP. Tap <b>"Snap Camera"</b> below to capture with native camera!';
     }
     return;
   }
 
-  hint.innerHTML = 'Starting camera stream... Please tap <b>Allow</b> if prompted!';
+  if (hint) hint.innerHTML = 'Starting camera stream... Please tap <b>Allow</b> if prompted.';
 
   html5QrScanner = new Html5Qrcode('scannerRegion');
   const qrConfig = {
@@ -1415,25 +1493,21 @@ async function openScanner(fillFieldId, thenOpenSheet) {
       onQrScanSuccess,
       () => {}
     );
-    hint.innerHTML = 'Point camera at a LiquidLink QR code to scan.';
+    if (hint) hint.innerHTML = 'Point camera at a LiquidLink QR code to scan.';
   } catch (err) {
-    console.warn('Html5Qrcode start facingMode error, trying camera list:', err);
+    console.warn('Html5Qrcode start error, trying camera list:', err);
     try {
       const cameras = await Html5Qrcode.getCameras();
       if (cameras && cameras.length > 0) {
         const backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear')) || cameras[0];
         await html5QrScanner.start(backCamera.id, qrConfig, onQrScanSuccess, () => {});
-        hint.innerHTML = 'Point camera at a LiquidLink QR code to scan.';
+        if (hint) hint.innerHTML = 'Point camera at a LiquidLink QR code to scan.';
         return;
       }
     } catch (camErr) {}
     
-    if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
-      hint.innerHTML = ' <b>Camera Permission Denied:</b> Please grant camera access in browser site settings.<br><br>Or tap <b>"Upload QR Image"</b> below!';
-    } else if (!isSecure) {
-      hint.innerHTML = ' <b>HTTP Context:</b> Live camera stream blocked on plain HTTP.<br><b>Tap "Upload QR Photo" below</b> to select/snap a QR picture!';
-    } else {
-      hint.innerHTML = ' <b>Camera stream error:</b> Camera unavailable.<br><b>Tap "Upload QR Photo" below</b> to scan from gallery!';
+    if (hint) {
+      hint.innerHTML = 'Live camera stream paused. Tap <b>"Snap Camera"</b> below to capture directly!';
     }
   }
 }
@@ -2008,7 +2082,11 @@ async function submitUpdateChannel(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   try {
-    const channel_id = document.getElementById('chanIdUpdate').value.trim();
+    let channel_id = (document.getElementById('chanIdUpdate').value || '').trim();
+    const customChan = document.getElementById('chanIdUpdateCustom');
+    if (customChan && customChan.style.display !== 'none' && customChan.value.trim()) {
+      channel_id = customChan.value.trim();
+    }
     const amount = parseInt(document.getElementById('chanUpdateAmt').value, 10);
     const sending = document.getElementById('chanDirection').value === 'true';
     if (!channel_id) { showAlert('Channel ID required', true); return; }
@@ -2022,7 +2100,11 @@ async function submitUpdateChannel(e) {
 
 async function submitSettleChannel(action) {
   try {
-    const channel_id = document.getElementById('chanIdSettle').value.trim();
+    let channel_id = (document.getElementById('chanIdSettle').value || '').trim();
+    const customChan = document.getElementById('chanIdSettleCustom');
+    if (customChan && customChan.style.display !== 'none' && customChan.value.trim()) {
+      channel_id = customChan.value.trim();
+    }
     if (!channel_id) { showAlert('Channel ID is required', true); return; }
     await postData('/api/v1/channels/settle', { channel_id, action });
     showAlert('Settlement ' + action + ' executed');
@@ -2656,6 +2738,9 @@ async function refreshChannelsUI() {
     const countEl = document.getElementById('channelsCount');
     if (countEl) countEl.textContent = '(' + channels.length + ')';
 
+    // Populate all channel dropdowns across the UI
+    populateChannelDropdowns(channels);
+
     const container = document.getElementById('channelsListContainer');
     if (container) {
       if (channels.length > 0) {
@@ -2668,14 +2753,24 @@ async function refreshChannelsUI() {
           const partyB = (ch.share && ch.share.party_b) || (ch.share && ch.share.PartyB) || '';
           const balA = (ch.share && ch.share.balance_party_a) !== undefined ? ch.share.balance_party_a : (ch.share && ch.share.BalancePartyA);
           const balB = (ch.share && ch.share.balance_party_b) !== undefined ? ch.share.balance_party_b : (ch.share && ch.share.BalancePartyB);
+          const shortId = ch.id.slice(0, 10) + '...' + ch.id.slice(-6);
 
-          html += '<div class="list-row"><div class="row-main">' +
-            '<div class="row-title">' + ch.id + ' <span class="badge ' + badgeClass + '">' + stateStr + '</span></div>' +
-            '<div class="row-sub">' + partyA + ' → ' + partyB + '</div></div>' +
-            '<div class="row-side"><div class="top">' + balA + ' / ' + balB + '</div>' +
-            '<div class="bottom">seq ' + ch.sequence + '</div></div></div>';
+          html += '<div class="list-row" style="flex-wrap:wrap; padding:12px 14px; background:var(--surface); border:1px solid var(--border-soft); border-radius:12px; margin-bottom:10px;">' +
+            '<div class="row-main" style="min-width:180px;">' +
+              '<div class="row-title" style="display:flex; align-items:center; gap:8px;">' +
+                '<span style="font-family:var(--font-mono); font-weight:700;">' + shortId + '</span> ' +
+                '<span class="badge ' + badgeClass + '">' + stateStr + '</span>' +
+              '</div>' +
+              '<div class="row-sub" style="font-size:0.75rem; margin-top:4px;">' + (partyA.slice(0, 8) + '...') + ' → ' + (partyB.slice(0, 8) + '...') + '</div>' +
+            '</div>' +
+            '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:3px;">' +
+              '<div class="top" style="color:var(--text); font-weight:700;">' + balA + ' / ' + balB + ' LQD</div>' +
+              '<div class="bottom" style="font-size:0.72rem; color:var(--text-dim);">Sequence ' + ch.sequence + '</div>' +
+              '<button type="button" class="btn btn-sm btn-ghost" onclick="openOfflinePaymentForChannel(\'' + ch.id + '\')" style="margin-top:4px; padding:3px 9px; font-size:0.72rem;">Pay Offline</button>' +
+            '</div></div>';
         });
         container.innerHTML = html;
+        container.style.paddingBottom = '36px';
       } else {
         container.innerHTML = '<div class="empty-row">No active state channels yet. Tap "+ Open" to create one.</div>';
       }
@@ -2973,6 +3068,91 @@ function handleOfflineQrImageUpload(input) {
       showAlert('No valid offline payment QR code found in image', true);
     });
 }
+
+
+/* ---------- Channel Dropdown & Navigation Helpers ---------- */
+function toggleCustomChannelInput() {
+  const custom = document.getElementById('bleChannelCustomID');
+  const btn = document.getElementById('btnToggleCustomChan');
+  if (!custom) return;
+  if (custom.style.display === 'none') {
+    custom.style.display = 'block';
+    custom.focus();
+    if (btn) btn.textContent = 'Use Dropdown';
+  } else {
+    custom.style.display = 'none';
+    if (btn) btn.textContent = '+ Custom ID';
+  }
+}
+
+function toggleCustomUpdateChan() {
+  const custom = document.getElementById('chanIdUpdateCustom');
+  const btn = document.getElementById('btnToggleCustomUpdate');
+  if (!custom) return;
+  if (custom.style.display === 'none') {
+    custom.style.display = 'block';
+    custom.focus();
+    if (btn) btn.textContent = 'Use Dropdown';
+  } else {
+    custom.style.display = 'none';
+    if (btn) btn.textContent = '+ Custom ID';
+  }
+}
+
+function toggleCustomSettleChan() {
+  const custom = document.getElementById('chanIdSettleCustom');
+  const btn = document.getElementById('btnToggleCustomSettle');
+  if (!custom) return;
+  if (custom.style.display === 'none') {
+    custom.style.display = 'block';
+    custom.focus();
+    if (btn) btn.textContent = 'Use Dropdown';
+  } else {
+    custom.style.display = 'none';
+    if (btn) btn.textContent = '+ Custom ID';
+  }
+}
+
+function openOfflinePaymentForChannel(channelId) {
+  openSheet('sheetBluetooth');
+  switchSubpanel('subBlePayment', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[0], 'sheetBluetooth');
+  const sel = document.getElementById('bleChannelID');
+  if (sel) {
+    sel.value = channelId;
+  }
+}
+
+function populateChannelDropdowns(channels) {
+  const dropdownIds = ['bleChannelID', 'chanIdUpdate', 'chanIdSettle'];
+  dropdownIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const currentVal = el.value;
+    el.innerHTML = '<option value="">-- Select Active Channel --</option>';
+    if (channels && channels.length > 0) {
+      channels.forEach(ch => {
+        const opt = document.createElement('option');
+        opt.value = ch.id;
+        const balA = ch.share ? (ch.share.balance_party_a !== undefined ? ch.share.balance_party_a : ch.share.BalancePartyA) : 0;
+        const balB = ch.share ? (ch.share.balance_party_b !== undefined ? ch.share.balance_party_b : ch.share.BalancePartyB) : 0;
+        const shortId = ch.id.slice(0, 8) + '...' + ch.id.slice(-6);
+        opt.textContent = shortId + ' (Bal: ' + balA + ' / ' + balB + ' LQD - Seq ' + (ch.sequence || 1) + ')';
+        el.appendChild(opt);
+      });
+      if (currentVal && channels.some(c => c.id === currentVal)) {
+        el.value = currentVal;
+      } else if (channels.length > 0 && id === 'bleChannelID') {
+        el.value = channels[0].id;
+      }
+    } else {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No channels open yet - tap "+ Open"';
+      el.appendChild(opt);
+    }
+  });
+}
+
 </script>
 </body>
 </html>`
