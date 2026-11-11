@@ -100,12 +100,17 @@ func (r *badgerRegistry) VerifyReceipt(ctx context.Context, rec *Receipt) (bool,
 	return true, nil
 }
 
-func (r *badgerRegistry) MapUTR(ctx context.Context, utr string, txID string) error {
+func (r *badgerRegistry) MapUTR(ctx context.Context, utr string, txID string, address ...crypto.Address) error {
+	var userAddr crypto.Address
+	if len(address) > 0 {
+		userAddr = address[0]
+	}
 	mapping := &UTRMapping{
 		UTR:           utr,
 		TransactionID: txID,
 		Status:        "pending",
 		CreatedAt:     time.Now(),
+		Address:       userAddr,
 	}
 
 	encoded, err := json.Marshal(mapping)
@@ -172,8 +177,8 @@ func (b *bridgeImpl) InitiateBridgeRequest(ctx context.Context, to crypto.Addres
 	utr := "UTR" + hex.EncodeToString(utrHash[:8])
 	txID := "tx-bridge-" + hex.EncodeToString(utrHash[8:16])
 
-	// 3. Store UTR Mapping
-	if err := b.registry.MapUTR(ctx, utr, txID); err != nil {
+	// 3. Store UTR Mapping with associated receiver address
+	if err := b.registry.MapUTR(ctx, utr, txID, to); err != nil {
 		if b.assetManager != nil {
 			_ = b.assetManager.Credit(ctx, to, amount)
 		}

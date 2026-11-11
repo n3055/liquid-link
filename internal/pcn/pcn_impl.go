@@ -120,18 +120,23 @@ func NewManager(
 	}
 }
 
-func (m *managerImpl) OpenChannel(ctx context.Context, counterpart crypto.Address, initialDeposit token.Amount) (*Channel, error) {
+func (m *managerImpl) OpenChannel(ctx context.Context, counterpart crypto.Address, initialDeposit token.Amount, sender ...crypto.Address) (*Channel, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	partyA := m.nodeAddr
+	if len(sender) > 0 && sender[0] != "" {
+		partyA = sender[0]
+	}
+
 	// Unique channel ID
-	idRaw := fmt.Sprintf("%s|%s|%d|%d", m.nodeAddr, counterpart, initialDeposit, time.Now().UnixNano())
+	idRaw := fmt.Sprintf("%s|%s|%d|%d", partyA, counterpart, initialDeposit, time.Now().UnixNano())
 	hash := sha256.Sum256([]byte(idRaw))
 	channelID := hex.EncodeToString(hash[:16])
 
-	// Lock collateral (debit node balance via ledger/asset manager)
+	// Lock collateral (debit partyA balance via ledger/asset manager)
 	if m.assetManager != nil {
-		if err := m.assetManager.Debit(ctx, m.nodeAddr, initialDeposit); err != nil {
+		if err := m.assetManager.Debit(ctx, partyA, initialDeposit); err != nil {
 			return nil, fmt.Errorf("failed to lock collateral deposit: %w", err)
 		}
 	}
@@ -140,7 +145,7 @@ func (m *managerImpl) OpenChannel(ctx context.Context, counterpart crypto.Addres
 		ID:    channelID,
 		State: StateOpen,
 		Share: Share{
-			PartyA:        m.nodeAddr,
+			PartyA:        partyA,
 			PartyB:        counterpart,
 			BalancePartyA: initialDeposit,
 			BalancePartyB: 0,
@@ -164,7 +169,7 @@ func (m *managerImpl) OpenChannel(ctx context.Context, counterpart crypto.Addres
 
 	if err := m.registry.RegisterChannel(ctx, ch); err != nil {
 		if m.assetManager != nil {
-			_ = m.assetManager.Credit(ctx, m.nodeAddr, initialDeposit)
+			_ = m.assetManager.Credit(ctx, partyA, initialDeposit)
 		}
 		return nil, fmt.Errorf("failed to register channel: %w", err)
 	}

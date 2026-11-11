@@ -993,6 +993,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
   <div id="subOpen" class="sheet-subpanel active">
     <form onsubmit="submitOpenChannel(event)">
+      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:12px;">Opening from active wallet: <strong id="openChannelSenderAddr" style="font-family:var(--font-mono); color:var(--accent-strong);"></strong></div>
       <div class="form-group">
         <label for="chanCounterparty">Counterparty address</label>
         <input type="text" id="chanCounterparty" placeholder="Wallet address" required>
@@ -1306,6 +1307,14 @@ function showAlert(msg, isError) {
 function openSheet(id) {
   const el = document.getElementById(id);
   if (el) {
+    if (id === 'sheetBridge') {
+      const rec = document.getElementById('bridgeReceiver');
+      if (rec && !rec.value) rec.value = getActiveWallet();
+    }
+    if (id === 'sheetChannel') {
+      const senderEl = document.getElementById('openChannelSenderAddr');
+      if (senderEl) senderEl.textContent = getActiveWallet();
+    }
     el.classList.add('open');
     document.body.style.overflow = 'hidden';
   }
@@ -1644,13 +1653,87 @@ function getStorageKey(key) {
   return 'liquidlink_' + key + '_' + port;
 }
 
+function getWalletHoldingsKey(addr) {
+  const target = addr || getActiveWallet();
+  return getStorageKey('holdings_' + (target || '').toLowerCase());
+}
+
+function getCachedWalletHoldings(addr) {
+  try {
+    const raw = localStorage.getItem(getWalletHoldingsKey(addr));
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+
+function saveWalletHoldings(addr, holdings) {
+  const target = addr || getActiveWallet();
+  if (!target) return;
+  try {
+    const prev = getCachedWalletHoldings(target) || {};
+    const merged = Object.assign({}, prev, holdings);
+    localStorage.setItem(getWalletHoldingsKey(target), JSON.stringify(merged));
+  } catch (e) {}
+}
+
+function getChannelsStorageKey(addr) {
+  const target = addr || getActiveWallet();
+  return getStorageKey('pcn_channels_' + (target || '').toLowerCase());
+}
+
+function getCachedWalletChannels(addr) {
+  try {
+    const raw = localStorage.getItem(getChannelsStorageKey(addr));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveWalletChannels(addr, channels) {
+  const target = addr || getActiveWallet();
+  try {
+    localStorage.setItem(getChannelsStorageKey(target), JSON.stringify(channels || []));
+  } catch (e) {}
+}
+
+function getBridgeStorageKey(addr) {
+  const target = addr || getActiveWallet();
+  return getStorageKey('bridge_mappings_' + (target || '').toLowerCase());
+}
+
+function getCachedWalletBridgeMappings(addr) {
+  try {
+    const raw = localStorage.getItem(getBridgeStorageKey(addr));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveWalletBridgeMappings(addr, mappings) {
+  const target = addr || getActiveWallet();
+  try {
+    localStorage.setItem(getBridgeStorageKey(target), JSON.stringify(mappings || []));
+  } catch (e) {}
+}
+
+function getOfflineQueueStorageKey(addr) {
+  const target = addr || getActiveWallet();
+  return getStorageKey('offline_queue_' + (target || '').toLowerCase());
+}
+
 let activeBleDevice = null;
 let activeBleServer = null;
 let activeBleCharacteristic = null;
 
 function getOfflineQueue() {
   try {
-    const raw = localStorage.getItem(getStorageKey('offline_queue'));
+    const raw = localStorage.getItem(getOfflineQueueStorageKey());
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
@@ -1660,7 +1743,7 @@ function getOfflineQueue() {
 }
 
 function saveOfflineQueue(queue) {
-  localStorage.setItem(getStorageKey('offline_queue'), JSON.stringify(queue));
+  localStorage.setItem(getOfflineQueueStorageKey(), JSON.stringify(queue));
   renderOfflineQueue();
 }
 
@@ -1813,10 +1896,7 @@ async function submitOfflinePaymentForm(e) {
   let item = null;
   if (payType === 'pcn') {
     let chanId = (document.getElementById('bleChannelID').value || '').trim();
-    let channels = [];
-    try {
-      channels = JSON.parse(localStorage.getItem(getStorageKey('pcn_channels'))) || [];
-    } catch (e) {}
+    let channels = getCachedWalletChannels(user);
 
     let ch = channels.find(c => c.id === chanId);
     if (!ch && channels.length > 0) {
@@ -1975,6 +2055,29 @@ async function submitOfflinePaymentForm(e) {
     const queue = getOfflineQueue();
     queue.push(item);
     saveOfflineQueue(queue);
+
+    if (payType === 'pcn') {
+      const channels = getCachedWalletChannels(user);
+      const chIndex = channels.findIndex(c => c.id === item.channel_id);
+      if (chIndex >= 0) {
+        channels[chIndex].sequence = item.sequence;
+        if (channels[chIndex].share) {
+          channels[chIndex].share.balance_party_a = item.balance_a;
+          channels[chIndex].share.balance_party_b = item.balance_b;
+        }
+        saveWalletChannels(user, channels);
+        renderChannelsList(channels);
+      }
+    } else {
+      const currentHoldings = getCachedWalletHoldings(user) || { balance: 1000, inr_balance: 1000 };
+      if (currentHoldings.balance !== undefined) {
+        currentHoldings.balance = Math.max(0, currentHoldings.balance - amount);
+        saveWalletHoldings(user, currentHoldings);
+        const heroBalEl = document.getElementById('heroTotalBalance');
+        if (heroBalEl) heroBalEl.innerHTML = currentHoldings.balance + '<small>LQD</small>';
+      }
+    }
+
     showAlert('Offline mode: Payment signed and queued locally (' + amount + ' LQD). Present QR code to receiver.');
   }
 }
@@ -2104,13 +2207,15 @@ async function submitOpenChannel(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   try {
+    const user = getActiveWallet();
     const counterparty = document.getElementById('chanCounterparty').value.trim();
     const amount = parseInt(document.getElementById('chanAmount').value, 10);
     if (!counterparty) { showAlert('Counterparty address required', true); return; }
     if (isNaN(amount) || amount <= 0) { showAlert('Valid deposit amount required', true); return; }
 
-    const res = await postData('/api/v1/channels/open', { counterparty, amount }, btn);
+    const res = await postData('/api/v1/channels/open', { sender: user, counterparty, amount }, btn);
     showAlert('State channel opened: ' + res.id);
+    closeSheet('sheetChannel');
     refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
@@ -2286,11 +2391,33 @@ async function createNewWalletUI() {
 
   try {
     const res = await postData('/api/v1/wallet/create', {});
-    localStorage.setItem(getStorageKey('active_wallet'), res.address);
-    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([res.address]));
-    await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
+    const newAddr = res.address;
+    const initialLqd = res.balance || 1000;
+    const initialInr = res.inr_balance || 1000;
+
+    localStorage.setItem(getStorageKey('active_wallet'), newAddr);
+    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([newAddr]));
+
+    // Persist new wallet initial balance immediately in localStorage
+    saveWalletHoldings(newAddr, {
+      balance: initialLqd,
+      inr_balance: initialInr,
+      inr_reserved: 0,
+      staked_shares: 0,
+      bonds_held: 0
+    });
+
+    // Reset scoped storage for channels and bridge for this brand-new wallet
+    saveWalletChannels(newAddr, []);
+    saveWalletBridgeMappings(newAddr, []);
+    saveWalletOfflineQueue(newAddr, []);
+
+    // Instantly update DOM with scoped empty lists and new balance
+    await loadActiveWalletUI(newAddr, initialLqd, initialInr);
+    renderChannelsList([]);
+    renderBridgeList([]);
     refreshDashboardData();
-    celebrateWalletCreation(res.address, res.balance || 1000, res.inr_balance || 1000);
+    celebrateWalletCreation(newAddr, initialLqd, initialInr);
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -2398,11 +2525,30 @@ async function createNewWalletFromWelcome() {
   closeWelcomeOverlay();
   try {
     const res = await postData('/api/v1/wallet/create', {});
-    localStorage.setItem(getStorageKey('active_wallet'), res.address);
-    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([res.address]));
-    await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
+    const newAddr = res.address;
+    const initialLqd = res.balance || 1000;
+    const initialInr = res.inr_balance || 1000;
+
+    localStorage.setItem(getStorageKey('active_wallet'), newAddr);
+    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([newAddr]));
+
+    saveWalletHoldings(newAddr, {
+      balance: initialLqd,
+      inr_balance: initialInr,
+      inr_reserved: 0,
+      staked_shares: 0,
+      bonds_held: 0
+    });
+
+    saveWalletChannels(newAddr, []);
+    saveWalletBridgeMappings(newAddr, []);
+    saveWalletOfflineQueue(newAddr, []);
+
+    await loadActiveWalletUI(newAddr, initialLqd, initialInr);
+    renderChannelsList([]);
+    renderBridgeList([]);
     refreshDashboardData();
-    celebrateWalletCreation(res.address, res.balance || 1000, res.inr_balance || 1000);
+    celebrateWalletCreation(newAddr, initialLqd, initialInr);
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -2583,17 +2729,30 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
   if (walletAddrEl) walletAddrEl.textContent = addr;
 
   const heroBalEl = document.getElementById('heroTotalBalance');
-  if (heroBalEl && initialBalance !== undefined) {
-    heroBalEl.innerHTML = initialBalance + '<small>LQD</small>';
-  }
-
   const inrBalEl = document.getElementById('heroINRBalance');
   const obInrEl = document.getElementById('obAvailableINR');
-  if (initialINRBalance !== undefined) {
-    const inrStr = (typeof initialINRBalance === 'number') ? initialINRBalance.toFixed(2) : initialINRBalance;
-    if (inrBalEl) inrBalEl.textContent = '₹' + inrStr + ' INR';
-    if (obInrEl) obInrEl.textContent = '₹' + inrStr + ' INR';
+
+  if (initialBalance !== undefined) {
+    saveWalletHoldings(addr, {
+      balance: initialBalance,
+      inr_balance: initialINRBalance
+    });
   }
+
+  // Load cached holdings immediately so offline mode or offline reload never shows node's balance!
+  const cached = getCachedWalletHoldings(addr);
+  const isNodeDefault = (addr === '{{ .Address }}');
+  const fallbackBal = isNodeDefault ? {{ .Balance }} : 1000;
+  const fallbackInr = isNodeDefault ? {{ .INRBalance }} : 1000;
+
+  const currentBal = (cached && cached.balance !== undefined) ? cached.balance : (initialBalance !== undefined ? initialBalance : fallbackBal);
+  const currentInr = (cached && cached.inr_balance !== undefined) ? cached.inr_balance : (initialINRBalance !== undefined ? initialINRBalance : fallbackInr);
+  const resVal = (cached && cached.inr_reserved !== undefined) ? cached.inr_reserved : 0;
+
+  if (heroBalEl) heroBalEl.innerHTML = currentBal + '<small>LQD</small>';
+  const displayINR = '₹' + Number(currentInr).toFixed(2) + ' INR' + (resVal > 0 ? ' (' + Number(resVal).toFixed(2) + ' Reserved)' : '');
+  if (inrBalEl) inrBalEl.textContent = displayINR;
+  if (obInrEl) obInrEl.textContent = displayINR;
 
   const topbarBtn = document.getElementById('topbarAvatarBtn');
   if (topbarBtn) topbarBtn.innerHTML = generateAvatarSVG(addr, 36);
@@ -2613,9 +2772,9 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
       if (holdings.inr_balance !== undefined) {
         const inrStr = (typeof holdings.inr_balance === 'number') ? holdings.inr_balance.toFixed(2) : holdings.inr_balance;
         const resVal = (typeof holdings.inr_reserved === 'number') ? holdings.inr_reserved : parseFloat(holdings.inr_reserved || 0);
-        const displayINR = '₹' + inrStr + ' INR' + (resVal > 0 ? ' (' + resVal.toFixed(2) + ' Reserved)' : '');
-        if (inrBalEl) inrBalEl.textContent = displayINR;
-        if (obInrEl) obInrEl.textContent = displayINR;
+        const liveDisplayINR = '₹' + inrStr + ' INR' + (resVal > 0 ? ' (' + resVal.toFixed(2) + ' Reserved)' : '');
+        if (inrBalEl) inrBalEl.textContent = liveDisplayINR;
+        if (obInrEl) obInrEl.textContent = liveDisplayINR;
       }
       const stEl = document.getElementById('userStakedShares');
       if (stEl && holdings.staked_shares !== undefined) {
@@ -2625,6 +2784,7 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
       if (bdEl && holdings.bonds_held !== undefined) {
         bdEl.textContent = holdings.bonds_held + ' Bonds';
       }
+      saveWalletHoldings(addr, holdings);
     }
   } catch (err) {}
 
@@ -2654,6 +2814,8 @@ function renderWalletsListUI() {
 
 function switchActiveWallet(addr) {
   loadActiveWalletUI(addr);
+  renderChannelsList(getCachedWalletChannels(addr));
+  renderBridgeList(getCachedWalletBridgeMappings(addr));
   refreshDashboardData();
   showAlert('Switched active wallet to ' + addr.substring(0, 14) + '...');
 }
@@ -2760,90 +2922,112 @@ async function refreshOrderbookUI() {
   } catch (err) {}
 }
 
+function renderChannelsList(channels) {
+  const countEl = document.getElementById('channelsCount');
+  if (countEl) countEl.textContent = '(' + (channels ? channels.length : 0) + ')';
+
+  populateChannelDropdowns(channels || []);
+
+  const container = document.getElementById('channelsListContainer');
+  if (!container) return;
+
+  if (channels && channels.length > 0) {
+    let html = '';
+    channels.forEach(ch => {
+      const isOpened = ch.state === 'OPEN' || ch.state === 0;
+      const stateStr = isOpened ? 'OPEN' : ch.state;
+      const badgeClass = isOpened ? 'badge-active' : 'badge-pending';
+      const partyA = (ch.share && (ch.share.party_a || ch.share.PartyA)) || ch.party_a || '';
+      const partyB = (ch.share && (ch.share.party_b || ch.share.PartyB)) || ch.party_b || '';
+      const balA = (ch.share && ch.share.balance_party_a !== undefined) ? ch.share.balance_party_a : ((ch.share && ch.share.BalancePartyA !== undefined) ? ch.share.BalancePartyA : (ch.balance_a !== undefined ? ch.balance_a : 0));
+      const balB = (ch.share && ch.share.balance_party_b !== undefined) ? ch.share.balance_party_b : ((ch.share && ch.share.BalancePartyB !== undefined) ? ch.share.BalancePartyB : (ch.balance_b !== undefined ? ch.balance_b : 0));
+      const shortId = ch.id ? (ch.id.slice(0, 10) + '...' + ch.id.slice(-6)) : 'Channel';
+
+      html += '<div class="list-row" style="flex-wrap:wrap; padding:12px 14px; background:var(--surface); border:1px solid var(--border-soft); border-radius:12px; margin-bottom:10px;">' +
+        '<div class="row-main" style="min-width:180px;">' +
+          '<div class="row-title" style="display:flex; align-items:center; gap:8px;">' +
+            '<span style="font-family:var(--font-mono); font-weight:700;">' + shortId + '</span> ' +
+            '<span class="badge ' + badgeClass + '">' + stateStr + '</span>' +
+          '</div>' +
+          '<div class="row-sub" style="font-size:0.75rem; margin-top:4px;">' + (partyA.slice(0, 8) + '...') + ' → ' + (partyB.slice(0, 8) + '...') + '</div>' +
+        '</div>' +
+        '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:3px;">' +
+          '<div class="top" style="color:var(--text); font-weight:700;">' + balA + ' / ' + balB + ' LQD</div>' +
+          '<div class="bottom" style="font-size:0.72rem; color:var(--text-dim);">Sequence ' + (ch.sequence || 1) + '</div>' +
+          '<button type="button" class="btn btn-sm btn-ghost" onclick="openOfflinePaymentForChannel(\'' + ch.id + '\')" style="margin-top:4px; padding:3px 9px; font-size:0.72rem;">Pay Offline</button>' +
+        '</div></div>';
+    });
+    container.innerHTML = html;
+    container.style.paddingBottom = '36px';
+  } else {
+    container.innerHTML = '<div class="empty-row">No active state channels yet. Tap "+ Open" to create one.</div>';
+  }
+}
+
+function renderBridgeList(mappings) {
+  const countEl = document.getElementById('bridgeCount');
+  if (countEl) countEl.textContent = '(' + (mappings ? mappings.length : 0) + ')';
+
+  const container = document.getElementById('bridgeListContainer');
+  if (!container) return;
+
+  if (mappings && mappings.length > 0) {
+    let html = '';
+    mappings.forEach(m => {
+      const isSettled = m.status === 'SETTLED' || m.status === 2 || m.status === 'settled';
+      const statusStr = isSettled ? 'SETTLED' : (m.status || 'PENDING');
+      const badgeClass = isSettled ? 'badge-settled' : 'badge-pending';
+      const txId = m.transaction_id || m.TransactionID || '';
+
+      const verifyBtn = !isSettled ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openVerifySheet(\'' + m.utr + '\');">Verify & Settle</button>' : '';
+      html += '<div class="list-row" onclick="openVerifySheet(\'' + m.utr + '\')" style="cursor:pointer;"><div class="row-main">' +
+        '<div class="row-title">' + m.utr + ' <span class="badge ' + badgeClass + '">' + statusStr + '</span></div>' +
+        '<div class="row-sub">Tx ' + txId + '</div></div>' +
+        '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">' + verifyBtn + '<div class="bottom">' + (m.created_at || '') + '</div></div></div>';
+    });
+    container.innerHTML = html;
+  } else {
+    container.innerHTML = '<div class="empty-row">No fiat bridge requests yet.</div>';
+  }
+}
+
 async function refreshChannelsUI() {
+  const activeWallet = getActiveWallet();
+  let channels = [];
   try {
-    const res = await fetchData('/api/v1/channels/list');
-    let channels = (res && res.channels) || [];
-    if (channels && channels.length > 0) {
-      localStorage.setItem(getStorageKey('pcn_channels'), JSON.stringify(channels));
-    } else {
-      const cached = localStorage.getItem(getStorageKey('pcn_channels'));
-      if (cached) {
-        try { channels = JSON.parse(cached); } catch (e) {}
-      }
-    }
-    const countEl = document.getElementById('channelsCount');
-    if (countEl) countEl.textContent = '(' + channels.length + ')';
-
-    // Populate all channel dropdowns across the UI
-    populateChannelDropdowns(channels);
-
-    const container = document.getElementById('channelsListContainer');
-    if (container) {
-      if (channels.length > 0) {
-        let html = '';
-        channels.forEach(ch => {
-          const isOpened = ch.state === 'OPEN' || ch.state === 0;
-          const stateStr = isOpened ? 'OPEN' : ch.state;
-          const badgeClass = isOpened ? 'badge-active' : 'badge-pending';
-          const partyA = (ch.share && ch.share.party_a) || (ch.share && ch.share.PartyA) || '';
-          const partyB = (ch.share && ch.share.party_b) || (ch.share && ch.share.PartyB) || '';
-          const balA = (ch.share && ch.share.balance_party_a) !== undefined ? ch.share.balance_party_a : (ch.share && ch.share.BalancePartyA);
-          const balB = (ch.share && ch.share.balance_party_b) !== undefined ? ch.share.balance_party_b : (ch.share && ch.share.BalancePartyB);
-          const shortId = ch.id.slice(0, 10) + '...' + ch.id.slice(-6);
-
-          html += '<div class="list-row" style="flex-wrap:wrap; padding:12px 14px; background:var(--surface); border:1px solid var(--border-soft); border-radius:12px; margin-bottom:10px;">' +
-            '<div class="row-main" style="min-width:180px;">' +
-              '<div class="row-title" style="display:flex; align-items:center; gap:8px;">' +
-                '<span style="font-family:var(--font-mono); font-weight:700;">' + shortId + '</span> ' +
-                '<span class="badge ' + badgeClass + '">' + stateStr + '</span>' +
-              '</div>' +
-              '<div class="row-sub" style="font-size:0.75rem; margin-top:4px;">' + (partyA.slice(0, 8) + '...') + ' → ' + (partyB.slice(0, 8) + '...') + '</div>' +
-            '</div>' +
-            '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:3px;">' +
-              '<div class="top" style="color:var(--text); font-weight:700;">' + balA + ' / ' + balB + ' LQD</div>' +
-              '<div class="bottom" style="font-size:0.72rem; color:var(--text-dim);">Sequence ' + ch.sequence + '</div>' +
-              '<button type="button" class="btn btn-sm btn-ghost" onclick="openOfflinePaymentForChannel(\'' + ch.id + '\')" style="margin-top:4px; padding:3px 9px; font-size:0.72rem;">Pay Offline</button>' +
-            '</div></div>';
-        });
-        container.innerHTML = html;
-        container.style.paddingBottom = '36px';
-      } else {
-        container.innerHTML = '<div class="empty-row">No active state channels yet. Tap "+ Open" to create one.</div>';
-      }
-    }
-  } catch (err) {}
+    const res = await fetchData('/api/v1/channels/list?address=' + encodeURIComponent(activeWallet));
+    let rawChannels = (res && res.channels) || [];
+    channels = rawChannels.filter(ch => {
+      if (!ch) return false;
+      const partyA = ((ch.share && (ch.share.party_a || ch.share.PartyA)) || ch.party_a || '').toLowerCase();
+      const partyB = ((ch.share && (ch.share.party_b || ch.share.PartyB)) || ch.party_b || '').toLowerCase();
+      const u = activeWallet.toLowerCase();
+      return partyA === u || partyB === u;
+    });
+    saveWalletChannels(activeWallet, channels);
+  } catch (err) {
+    channels = getCachedWalletChannels(activeWallet);
+  }
+  renderChannelsList(channels);
 }
 
 async function refreshBridgeUI() {
+  const activeWallet = getActiveWallet();
+  let mappings = [];
   try {
-    const res = await fetchData('/api/v1/bridge/list');
-    const mappings = res.mappings || [];
-    const countEl = document.getElementById('bridgeCount');
-    if (countEl) countEl.textContent = '(' + mappings.length + ')';
-
-    const container = document.getElementById('bridgeListContainer');
-    if (container) {
-      if (mappings.length > 0) {
-        let html = '';
-        mappings.forEach(m => {
-          const isSettled = m.status === 'SETTLED' || m.status === 2;
-          const statusStr = isSettled ? 'SETTLED' : m.status;
-          const badgeClass = isSettled ? 'badge-settled' : 'badge-pending';
-          const txId = m.transaction_id || m.TransactionID || '';
-
-          const verifyBtn = !isSettled ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openVerifySheet(\'' + m.utr + '\');">Verify & Settle</button>' : '';
-          html += '<div class="list-row" onclick="openVerifySheet(\'' + m.utr + '\')" style="cursor:pointer;"><div class="row-main">' +
-            '<div class="row-title">' + m.utr + ' <span class="badge ' + badgeClass + '">' + statusStr + '</span></div>' +
-            '<div class="row-sub">Tx ' + txId + '</div></div>' +
-            '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">' + verifyBtn + '<div class="bottom">' + (m.created_at || '') + '</div></div></div>';
-        });
-        container.innerHTML = html;
-      } else {
-        container.innerHTML = '<div class="empty-row">No fiat bridge requests yet.</div>';
-      }
-    }
-  } catch (err) {}
+    const res = await fetchData('/api/v1/bridge/list?address=' + encodeURIComponent(activeWallet));
+    let rawMappings = (res && res.mappings) || [];
+    mappings = rawMappings.filter(m => {
+      if (!m) return false;
+      const mAddr = (m.address || m.Address || '').toLowerCase();
+      const u = activeWallet.toLowerCase();
+      return !mAddr || mAddr === u;
+    });
+    saveWalletBridgeMappings(activeWallet, mappings);
+  } catch (err) {
+    mappings = getCachedWalletBridgeMappings(activeWallet);
+  }
+  renderBridgeList(mappings);
 }
 
 async function refreshStabilityUI() {
@@ -2939,6 +3123,28 @@ async function refreshDashboardData() {
 }
 
 function initAvatars() {
+  const activeAddr = getActiveWallet();
+  if (activeAddr && activeAddr !== '{{ .Address }}') {
+    const cached = getCachedWalletHoldings(activeAddr);
+    const heroBalEl = document.getElementById('heroTotalBalance');
+    const inrBalEl = document.getElementById('heroINRBalance');
+    const obInrEl = document.getElementById('obAvailableINR');
+
+    const bal = (cached && cached.balance !== undefined) ? cached.balance : 1000;
+    const inr = (cached && cached.inr_balance !== undefined) ? cached.inr_balance : 1000;
+    const resInr = (cached && cached.inr_reserved !== undefined) ? cached.inr_reserved : 0;
+
+    if (heroBalEl) heroBalEl.innerHTML = bal + '<small>LQD</small>';
+    const displayINR = '₹' + Number(inr).toFixed(2) + ' INR' + (resInr > 0 ? ' (' + Number(resInr).toFixed(2) + ' Reserved)' : '');
+    if (inrBalEl) inrBalEl.textContent = displayINR;
+    if (obInrEl) obInrEl.textContent = displayINR;
+
+    const walletAddrEl = document.getElementById('walletAddress');
+    if (walletAddrEl) walletAddrEl.textContent = activeAddr;
+
+    renderChannelsList(getCachedWalletChannels(activeAddr));
+    renderBridgeList(getCachedWalletBridgeMappings(activeAddr));
+  }
   checkFirstTimeWelcome();
   resetHostUrl();
   renderOfflineQueue();
@@ -3135,11 +3341,9 @@ async function onOfflineQrScanSuccess(decodedText) {
     }
 
     // Update local state channel balances if PCN
+    const activeUser = getActiveWallet();
     if (item.channel_id) {
-      let channels = [];
-      try {
-        channels = JSON.parse(localStorage.getItem(getStorageKey('pcn_channels'))) || [];
-      } catch(e) {}
+      let channels = getCachedWalletChannels(activeUser);
       let ch = channels.find(c => c.id === item.channel_id);
       if (ch) {
         ch.sequence = item.sequence;
@@ -3147,8 +3351,15 @@ async function onOfflineQrScanSuccess(decodedText) {
           ch.share.balance_party_a = item.balance_a;
           ch.share.balance_party_b = item.balance_b;
         }
-        localStorage.setItem(getStorageKey('pcn_channels'), JSON.stringify(channels));
+        saveWalletChannels(activeUser, channels);
+        renderChannelsList(channels);
       }
+    } else {
+      const currentHoldings = getCachedWalletHoldings(activeUser) || { balance: 1000, inr_balance: 1000 };
+      currentHoldings.balance = (currentHoldings.balance || 0) + item.amount;
+      saveWalletHoldings(activeUser, currentHoldings);
+      const heroBalEl = document.getElementById('heroTotalBalance');
+      if (heroBalEl) heroBalEl.innerHTML = currentHoldings.balance + '<small>LQD</small>';
     }
 
     // Add signed statement to receiver's outbox queue to push when reconnected

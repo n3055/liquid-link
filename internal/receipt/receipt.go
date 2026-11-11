@@ -20,10 +20,11 @@ type Receipt struct {
 
 // UTRMapping connects a Unique Transaction Reference (bank transfer ID) to local transactions.
 type UTRMapping struct {
-	UTR           string    `json:"utr"`
-	TransactionID string    `json:"transaction_id"`
-	Status        string    `json:"status"` // e.g. "pending", "linked", "settled"
-	CreatedAt     time.Time `json:"created_at"`
+	UTR           string         `json:"utr"`
+	TransactionID string         `json:"transaction_id"`
+	Status        string         `json:"status"` // e.g. "pending", "linked", "settled"
+	CreatedAt     time.Time      `json:"created_at"`
+	Address       crypto.Address `json:"address,omitempty"`
 }
 
 // Registry stores and validates receipts and maps them to UTRs.
@@ -34,8 +35,8 @@ type Registry interface {
 	// VerifyReceipt checks the signature and authenticity of a receipt.
 	VerifyReceipt(ctx context.Context, r *Receipt) (bool, error)
 
-	// MapUTR links a fiat UTR to a local crypto transaction.
-	MapUTR(ctx context.Context, utr string, txID string) error
+	// MapUTR links a fiat UTR to a local crypto transaction, optionally associating a user address.
+	MapUTR(ctx context.Context, utr string, txID string, address ...crypto.Address) error
 
 	// GetUTRMapping retrieves the mapping details for a given UTR.
 	GetUTRMapping(ctx context.Context, utr string) (*UTRMapping, error)

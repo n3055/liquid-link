@@ -741,6 +741,7 @@ func (s *Server) handleMint(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// [PCN State] handleListChannels returns channels, optionally filtered by user address parameter.
 func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if s.pcnRegistry == nil {
@@ -756,6 +757,17 @@ func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
 
 	if channels == nil {
 		channels = []*pcn.Channel{}
+	}
+
+	targetAddr := r.URL.Query().Get("address")
+	if targetAddr != "" {
+		filtered := make([]*pcn.Channel, 0)
+		for _, ch := range channels {
+			if ch != nil && (string(ch.Share.PartyA) == targetAddr || string(ch.Share.PartyB) == targetAddr) {
+				filtered = append(filtered, ch)
+			}
+		}
+		channels = filtered
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -790,6 +802,7 @@ func (s *Server) handleGetChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 type openChannelReq struct {
+	Sender       string       `json:"sender,omitempty"`
 	Counterparty string       `json:"counterparty"`
 	Amount       token.Amount `json:"amount"`
 }
@@ -812,7 +825,14 @@ func (s *Server) handleOpenChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch, err := s.pcn.OpenChannel(ctx, crypto.Address(req.Counterparty), req.Amount)
+	var senderAddr crypto.Address
+	if req.Sender != "" {
+		senderAddr = crypto.Address(req.Sender)
+	} else if s.wallet != nil {
+		senderAddr = s.wallet.Address()
+	}
+
+	ch, err := s.pcn.OpenChannel(ctx, crypto.Address(req.Counterparty), req.Amount, senderAddr)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, "failed to open channel: "+err.Error())
 		return
@@ -1238,7 +1258,7 @@ func (s *Server) handleBluetoothBroadcast(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// [API] handleListUTRMappings returns all fiat bridge UTR mappings in the system.
+// [API] handleListUTRMappings returns all fiat bridge UTR mappings in the system, optionally filtered by user address.
 func (s *Server) handleListUTRMappings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if s.receiptRegistry == nil {
@@ -1254,6 +1274,17 @@ func (s *Server) handleListUTRMappings(w http.ResponseWriter, r *http.Request) {
 
 	if mappings == nil {
 		mappings = []*receipt.UTRMapping{}
+	}
+
+	targetAddr := r.URL.Query().Get("address")
+	if targetAddr != "" {
+		filtered := make([]*receipt.UTRMapping, 0)
+		for _, m := range mappings {
+			if m != nil && string(m.Address) == targetAddr {
+				filtered = append(filtered, m)
+			}
+		}
+		mappings = filtered
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
