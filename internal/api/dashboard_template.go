@@ -1549,7 +1549,7 @@ function onQrScanSuccess(decodedText) {
   showAlert('Address captured: ' + decodedText.substring(0, 16) + '...');
 }
 
-function handleQrImageUpload(input) {
+async function handleQrImageUpload(input) {
   if (!input.files || input.files.length === 0) return;
   const file = input.files[0];
   const hint = document.getElementById('scanHint');
@@ -3204,7 +3204,6 @@ async function handleOfflineQrImageUpload(input) {
       if (hint) hint.innerHTML = 'Could not detect a valid QR code in that photo. Please try again.';
       showAlert('No valid offline payment QR code found in image', true);
     });
-}
 }
 
 
