@@ -99,9 +99,11 @@ func (s *Server) setupRoutes() {
 	s.router.Use(middleware.Logger)
 	s.router.Use(middleware.Recoverer)
 
-	// Web UI Dashboard
+	// Web UI Dashboard & PWA Assets
 	s.router.Get("/", s.handleDashboard)
 	s.router.Get("/ui", s.handleDashboard)
+	s.router.Get("/manifest.json", s.handleManifest)
+	s.router.Get("/sw.js", s.handleServiceWorker)
 
 	// API v1 Namespace
 	s.router.Route("/api/v1", func(r chi.Router) {

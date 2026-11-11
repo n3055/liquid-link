@@ -20,36 +20,43 @@ const dashboardHTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>LiquidLink Wallet</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#090d16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
 <style>
 :root {
-  --bg: #0c0d10;
-  --bg-elevated: #121317;
-  --surface: #17181d;
-  --surface-2: #1e2025;
-  --border: #2b2d34;
-  --border-soft: #1d1f24;
-  --text: #eceef1;
-  --text-dim: #989ba3;
-  --text-faint: #5f6269;
-  --accent: #4d84e2;
-  --accent-dim: #396bb8;
-  --accent-strong: #6d9bee;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(77,132,226,0.12);
-  --success: #45a374;
-  --success-soft: rgba(69,163,116,0.12);
-  --amber: #b98f45;
-  --amber-soft: rgba(185,143,69,0.14);
-  --red: #c96a6a;
-  --red-soft: rgba(201,106,106,0.14);
-  --radius-lg: 18px;
+  --bg: #090d16;
+  --bg-elevated: #0f172a;
+  --surface: #131b2e;
+  --surface-2: #1e293b;
+  --border: #243048;
+  --border-soft: #172136;
+  --text: #f8fafc;
+  --text-dim: #94a3b8;
+  --text-faint: #64748b;
+  --accent: #38bdf8;
+  --accent-dim: #0284c7;
+  --accent-strong: #7dd3fc;
+  --accent-ink: #041019;
+  --accent-soft: rgba(56, 189, 248, 0.12);
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.12);
+  --amber: #f59e0b;
+  --amber-soft: rgba(245, 158, 11, 0.14);
+  --red: #ef4444;
+  --red-soft: rgba(239, 68, 68, 0.14);
+  --radius-lg: 16px;
   --radius: 12px;
-  --radius-sm: 9px;
+  --radius-sm: 8px;
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace;
@@ -387,9 +394,9 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
     <p class="welcome-sub">Decentralized Peer-to-Peer Settlement & Seigniorage Liquidity Protocol</p>
 
     <div class="welcome-features">
-      <div class="feat-item"><span class="feat-icon">⚡</span><span>Instant P2P State Channel Payments</span></div>
-      <div class="feat-item"><span class="feat-icon">🛡️</span><span>Algorithmic Seigniorage INR Peg Stability</span></div>
-      <div class="feat-item"><span class="feat-icon">📈</span><span>Real-Time Limit Orderbook Exchange</span></div>
+      <div class="feat-item"><span class="feat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span><span>Instant P2P State Channel Payments</span></div>
+      <div class="feat-item"><span class="feat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span>Algorithmic Seigniorage INR Peg Stability</span></div>
+      <div class="feat-item"><span class="feat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span><span>Real-Time Limit Orderbook Exchange</span></div>
     </div>
 
     <div class="welcome-actions">
@@ -403,9 +410,11 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 <div class="celebration-overlay" id="celebrationModal" style="display:none;">
   <div class="confetti-container" id="confettiContainer"></div>
   <div class="celebration-card">
-    <div class="celebration-icon">🥳</div>
-    <h2 style="margin:0 0 4px; font-size:1.4rem;">Wallet Created!</h2>
-    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:14px;">Your new Web3 wallet session is active and funded on LiquidLink testnet.</p>
+    <div class="celebration-icon" style="display:flex; justify-content:center; align-items:center; margin-bottom:10px;">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+    </div>
+    <h2 style="margin:0 0 4px; font-size:1.35rem; font-weight:700;">Wallet Created</h2>
+    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:14px;">Your Web3 wallet session is active and funded on LiquidLink.</p>
     
     <div class="cel-avatar" id="celAvatar"></div>
     <div class="cel-address" id="celAddressText"></div>
@@ -421,7 +430,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       </div>
     </div>
 
-    <button class="btn btn-primary" onclick="dismissCelebrationModal()" style="width:100%; margin-top:16px;">Launch Dashboard 🚀</button>
+    <button class="btn btn-primary" onclick="dismissCelebrationModal()" style="width:100%; margin-top:16px;">Enter Dashboard</button>
   </div>
 </div>
 
@@ -470,21 +479,25 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         </button>
       </div>
 
-      <div class="quick-actions">
+      <div class="quick-actions" style="display:grid; grid-template-columns: repeat(5, 1fr); gap:8px;">
         <button class="qa-btn" onclick="createNewWalletUI()">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
-          <span>New Wallet</span>
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
+          <span>New</span>
         </button>
         <button class="qa-btn" onclick="openSheet('sheetSend')">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 12h16M14 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12h16M14 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span>Send</span>
         </button>
         <button class="qa-btn" onclick="openReceive()">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z" fill="currentColor"/></svg></span>
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z" fill="currentColor"/></svg></span>
           <span>Receive</span>
         </button>
+        <button class="qa-btn" onclick="openSheet('sheetBluetooth')">
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span>Offline</span>
+        </button>
         <button class="qa-btn" onclick="openScanner('sendReceiver', 'sheetSend')">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4 12h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.4"/></svg></span>
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4 12h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.4"/></svg></span>
           <span>Scan</span>
         </button>
       </div>
@@ -717,7 +730,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
       <!-- Economist Design Explanation -->
       <div style="margin:16px; background:linear-gradient(135deg, rgba(77,132,226,0.1), rgba(129,140,248,0.1)); border:1px solid var(--accent-soft); border-radius:12px; padding:16px;">
-        <h4 style="font-size:0.9rem; color:var(--accent-strong); margin-bottom:6px;">⚡ Economist Seigniorage Stability Engine</h4>
+        <h4 style="font-size:0.9rem; color:var(--accent-strong); margin-bottom:6px;">Seigniorage Stability Protocol</h4>
         <p style="font-size:0.82rem; color:var(--text-dim); line-height:1.4;">
           <strong>Expansion Phase (LQD &gt; ₹1.00 INR):</strong> When market demand drives price above peg, the protocol inflates supply by minting new LQD and distributing it directly to Share stakers. Bondholders can redeem LQD-Bonds for 1 LQD + 5% premium.<br>
           <strong>Contraction Phase (LQD &lt; ₹1.00 INR):</strong> When market price dips below peg, the protocol contracts circulating supply by selling LQD-Bonds at a 15% discount. Burning LQD removes excess liquidity and restores the ₹1.00 peg equilibrium.
@@ -732,7 +745,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       <div class="section-head">
         <h2>State channels <span class="count" id="channelsCount">({{ len .Channels }})</span></h2>
         <div class="head-actions">
-          <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')">📡 BLE P2P Sync</button>
+          <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')">Offline P2P Sync</button>
           <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetChannel')">Manage</button>
           <button class="btn btn-sm btn-ghost" onclick="openSheet('sheetChannel')">+ Open</button>
         </div>
@@ -890,7 +903,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div class="hint" id="scanHint">Point the camera at a LiquidLink QR code or choose a photo below.</div>
   <input type="file" id="qrFileInput" accept="image/*" style="display:none;" onchange="handleQrImageUpload(this)">
   <div class="btn-row" style="margin-top:10px;">
-    <button type="button" class="btn btn-secondary" onclick="document.getElementById('qrFileInput').click()">📷 Upload QR Photo / Image</button>
+    <button type="button" class="btn btn-secondary" onclick="document.getElementById('qrFileInput').click()">Upload QR Image</button>
   </div>
 </div></div>
 
@@ -899,7 +912,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div class="sheet-handle"></div>
   <div class="sheet-head"><h3>Devnet Faucet / Mint</h3><button class="sheet-close" onclick="closeSheet('sheetMint')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <div style="font-size:0.8rem; color:#f59e0b; margin-bottom:12px; padding:8px 12px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:6px; display:flex; align-items:center; gap:8px;">
-    <span>⚡ <strong>Genesis / Devnet Faucet Tool:</strong> Minting is an administrative tool for testnet genesis allocation. Real end-users acquire tokens via transfers, trades, or fiat bridging.</span>
+    <span><strong>Genesis Faucet:</strong> Minting is an administrative tool for testnet genesis allocation. Real end-users acquire tokens via transfers, trades, or fiat bridging.</span>
   </div>
   <form onsubmit="submitMint(event)">
     <div class="form-group">
@@ -1024,8 +1037,8 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
   <div style="margin-top:16px; font-size:0.85rem; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:0.5px;">Bluetooth Offline Mesh</div>
   <div style="margin-top:8px; display:flex; gap:8px;">
-    <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')" style="flex:1;">📡 Bluetooth P2P Sync</button>
-    <button class="btn btn-sm btn-ghost" onclick="sendOfflineBluetoothTx()" style="flex:1;">⚡ Relay BLE Tx</button>
+    <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')" style="flex:1;">Offline P2P Sync</button>
+    <button class="btn btn-sm btn-ghost" onclick="sendOfflineBluetoothTx()" style="flex:1;">Relay BLE Tx</button>
   </div>
 
   <div style="margin-top:16px;" class="btn-row">
@@ -1038,39 +1051,21 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 <div class="overlay" id="sheetBluetooth"><div class="sheet">
   <div class="sheet-handle"></div>
   <div class="sheet-head">
-    <h3>Bluetooth P2P & Offline Sync</h3>
+    <h3>Offline P2P & BLE Mesh</h3>
     <button class="sheet-close" onclick="closeSheet('sheetBluetooth')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
   </div>
 
-  <div class="sheet-tabs">
-    <button class="active" onclick="switchSubpanel('subBlePair', this, 'sheetBluetooth')">BLE Device</button>
-    <button onclick="switchSubpanel('subBlePayment', this, 'sheetBluetooth')">Make Offline Payment</button>
-    <button onclick="switchSubpanel('subBleQueue', this, 'sheetBluetooth')">Queued Tx (<span id="bleQueueCount">0</span>)</button>
-  </div>
-
-  <!-- Subpanel 1: BLE Device Pairing -->
-  <div id="subBlePair" class="sheet-subpanel active">
-    <div style="background:var(--surface-2); padding:14px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;">
-      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:4px;">BLE Pairing Status</div>
-      <div id="bleConnStatus" style="font-weight:700; font-size:0.95rem; color:var(--text); display:flex; align-items:center; gap:8px;">
-        <span style="width:8px; height:8px; border-radius:50%; background:#989ba3; display:inline-block;" id="bleDot"></span>
-        <span id="bleStatusText">Disconnected</span>
-      </div>
-      <div id="bleDeviceInfo" style="font-size:0.78rem; font-family:var(--font-mono); color:var(--accent-strong); margin-top:6px;">No device paired</div>
-    </div>
-    <div style="display:flex; gap:10px;">
-      <button class="btn btn-primary" onclick="pairWebBluetooth()" style="flex:1;">📡 Pair Web Bluetooth Device</button>
-      <button class="btn btn-secondary" onclick="disconnectWebBluetooth()" style="flex:1;">Disconnect</button>
-    </div>
-    <p class="hint" style="margin-top:12px; font-size:0.78rem; color:var(--text-faint);">
-      Connects directly to nearby laptops/phones running LiquidLink BLE GATT service. Payments made while disconnected from the host will be queued locally with Ed25519 signatures.
-    </p>
+  <div class="sheet-tabs" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:4px;">
+    <button class="active" onclick="switchSubpanel('subBlePayment', this, 'sheetBluetooth')" style="font-size:0.74rem; padding:8px 4px;">Send Offline</button>
+    <button onclick="switchSubpanel('subBleReceive', this, 'sheetBluetooth')" style="font-size:0.74rem; padding:8px 4px;">Receive QR</button>
+    <button onclick="switchSubpanel('subBlePair', this, 'sheetBluetooth')" style="font-size:0.74rem; padding:8px 4px;">BLE Device</button>
+    <button onclick="switchSubpanel('subBleQueue', this, 'sheetBluetooth')" style="font-size:0.74rem; padding:8px 4px;">Outbox (<span id="bleQueueCount">0</span>)</button>
   </div>
 
   <!-- Subpanel 2: Make Offline Payment -->
-  <div id="subBlePayment" class="sheet-subpanel">
+  <div id="subBlePayment" class="sheet-subpanel active">
     <form onsubmit="submitOfflinePaymentForm(event)">
       <div class="form-group">
         <label>Payment Medium</label>
@@ -1095,8 +1090,53 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         <input type="number" id="bleAmount" min="1" placeholder="10" required>
       </div>
 
-      <button type="submit" class="btn btn-primary">Sign & Queue Offline Payment ⚡</button>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Sign & Show Payment QR</button>
     </form>
+
+    <!-- Signed Offline QR Display Card -->
+    <div id="offlinePaymentQrCard" style="display:none; background:var(--surface-2); padding:16px; border-radius:12px; border:1px solid var(--border); margin-top:14px; text-align:center;">
+      <div style="font-size:0.85rem; font-weight:600; color:var(--accent); margin-bottom:4px;">Signed Offline Payment</div>
+      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:10px;" id="offlineQrDetails">Channel Payment (Seq 3)</div>
+      <div id="offlinePaymentQrCanvas" style="display:inline-block; padding:10px; background:white; border-radius:8px; margin-bottom:10px;"></div>
+      <div style="font-size:0.74rem; color:var(--text-faint); margin-bottom:12px;">Present this QR code to the receiver's phone to transfer value offline.</div>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="dismissOfflinePaymentQr()" style="width:100%;">Done</button>
+    </div>
+  </div>
+
+  <!-- Subpanel 4: Receive Offline Payment via Camera -->
+  <div id="subBleReceive" class="sheet-subpanel">
+    <div style="background:var(--surface-2); padding:16px; border-radius:12px; border:1px solid var(--border); text-align:center;">
+      <div style="font-size:0.95rem; font-weight:600; color:var(--text); margin-bottom:4px;">Scan Offline Payment</div>
+      <p class="hint" style="font-size:0.78rem; color:var(--text-dim); margin-bottom:12px;">Scan the payer's offline payment QR code to verify Ed25519 signature and credit channel balance with zero internet.</p>
+      <div id="offlineScannerRegion" style="width:100%; max-width:260px; min-height:180px; margin:0 auto 12px; border-radius:12px; overflow:hidden; background:var(--surface);"></div>
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn btn-primary" onclick="startOfflinePaymentScan()" id="btnStartOfflineScan" style="flex:1;">Start Scanner</button>
+        <button type="button" class="btn btn-secondary" onclick="stopOfflinePaymentScan()" id="btnStopOfflineScan" style="flex:1; display:none;">Stop Camera</button>
+      </div>
+      <div style="margin-top:10px;">
+        <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('offlineQrFileInput').click()" style="width:100%;">Upload QR Image File</button>
+        <input type="file" id="offlineQrFileInput" accept="image/*" style="display:none;" onchange="handleOfflineQrImageUpload(this)">
+      </div>
+    </div>
+  </div>
+
+  <!-- Subpanel 1: BLE Device Pairing -->
+  <div id="subBlePair" class="sheet-subpanel">
+    <div style="background:var(--surface-2); padding:14px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;">
+      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:4px;">BLE Pairing Status</div>
+      <div id="bleConnStatus" style="font-weight:700; font-size:0.95rem; color:var(--text); display:flex; align-items:center; gap:8px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:#989ba3; display:inline-block;" id="bleDot"></span>
+        <span id="bleStatusText">Disconnected</span>
+      </div>
+      <div id="bleDeviceInfo" style="font-size:0.78rem; font-family:var(--font-mono); color:var(--accent-strong); margin-top:6px;">No device paired</div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-primary" onclick="pairWebBluetooth()" style="flex:1;">Pair BLE Device</button>
+      <button class="btn btn-secondary" onclick="disconnectWebBluetooth()" style="flex:1;">Disconnect</button>
+    </div>
+    <p class="hint" style="margin-top:12px; font-size:0.78rem; color:var(--text-faint);">
+      Connects directly to nearby devices running LiquidLink BLE GATT service. Payments made while disconnected will buffer locally with Ed25519 signatures.
+    </p>
   </div>
 
   <!-- Subpanel 3: Queued Offline Payments & Host Push -->
@@ -1107,7 +1147,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         <input type="text" id="bleHostUrl" placeholder="http://192.168.1.X:8080" style="font-family:var(--font-mono); font-size:0.85rem;">
         <button class="btn btn-sm btn-secondary" onclick="resetHostUrl()" style="white-space:nowrap;">This Node</button>
       </div>
-      <p class="hint" style="margin-top:4px;">Set IP of Laptop A (host node) when Laptop B connects back to network.</p>
+      <p class="hint" style="margin-top:4px;">Endpoint of the validator node to commit offline state transitions.</p>
     </div>
 
     <div id="bleQueueList" style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; margin-bottom:14px;">
@@ -1115,13 +1155,68 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
     </div>
 
     <div style="display:flex; gap:10px;">
-      <button class="btn btn-primary" onclick="pushOfflineQueueToHost()" id="btnPushHost" style="flex:2;">🚀 Push & Validate with Host</button>
+      <button class="btn btn-primary" onclick="pushOfflineQueueToHost()" id="btnPushHost" style="flex:2;">Push to Validator</button>
       <button class="btn btn-secondary" onclick="clearOfflineQueueUI()" style="flex:1;">Clear</button>
     </div>
   </div>
 </div></div>
 
 <script>
+/* ---------- PWA Service Worker Registration ---------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      console.log('[LiquidLink PWA] Service Worker registered:', reg.scope);
+    }).catch((err) => {
+      console.warn('[LiquidLink PWA] Service Worker registration failed:', err);
+    });
+  });
+}
+
+/* ---------- In-Browser Cryptographic Utilities (TweetNaCl & WebCrypto) ---------- */
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return bytes;
+}
+
+async function deriveAddressFromPub(pubBytes) {
+  const hash = await crypto.subtle.digest('SHA-256', pubBytes);
+  const hashBytes = new Uint8Array(hash);
+  return '0x' + bytesToHex(hashBytes.slice(0, 20));
+}
+
+async function getOrCreateClientKeypair() {
+  let privHex = localStorage.getItem('liquidlink_client_privkey');
+  let pubHex = localStorage.getItem('liquidlink_client_pubkey');
+  if (privHex && pubHex) {
+    const pubBytes = hexToBytes(pubHex);
+    const addr = await deriveAddressFromPub(pubBytes);
+    return {
+      secretKey: hexToBytes(privHex),
+      publicKey: pubBytes,
+      address: addr
+    };
+  }
+  if (window.nacl) {
+    const kp = nacl.sign.keyPair();
+    privHex = bytesToHex(kp.secretKey);
+    pubHex = bytesToHex(kp.publicKey);
+    localStorage.setItem('liquidlink_client_privkey', privHex);
+    localStorage.setItem('liquidlink_client_pubkey', pubHex);
+    const addr = await deriveAddressFromPub(kp.publicKey);
+    localStorage.setItem('liquidlink_client_address', addr);
+    return { secretKey: kp.secretKey, publicKey: kp.publicKey, address: addr };
+  }
+  return null;
+}
+
 /* ---------- Toast ---------- */
 let toastTimer;
 function showAlert(msg, isError) {
@@ -1281,7 +1376,7 @@ async function openScanner(fillFieldId, thenOpenSheet) {
   const isSecure = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   
   if (!window.Html5Qrcode) {
-    hint.innerHTML = '⚠️ Scanner engine loading. Tap <b>"📷 Upload QR Photo / Image"</b> below to pick a photo!';
+    hint.innerHTML = ' Scanner engine loading. Tap <b>"Upload QR Image"</b> below to pick a photo!';
     return;
   }
 
@@ -1296,14 +1391,14 @@ async function openScanner(fillFieldId, thenOpenSheet) {
   // Check MediaDevices API
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     if (!isSecure) {
-      hint.innerHTML = '💡 <b>HTTP Context Notice:</b> Mobile browsers disable live webcams over plain HTTP (<code>http://10.89.63.191</code>).<br><br><b>Solutions:</b><br>1. Tap <b>"📷 Upload QR Photo / Image"</b> below to pick/snap a photo.<br>2. Or enable HTTP camera in Chrome flags: <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.';
+      hint.innerHTML = ' <b>HTTP Context Notice:</b> Mobile browsers disable live webcams over plain HTTP (<code>http://10.89.63.191</code>).<br><br><b>Solutions:</b><br>1. Tap <b>"Upload QR Image"</b> below to pick/snap a photo.<br>2. Or enable HTTP camera in Chrome flags: <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.';
     } else {
-      hint.innerHTML = '⚠️ Live camera API not supported by browser. Tap <b>"📷 Upload QR Photo / Image"</b> below!';
+      hint.innerHTML = ' Live camera API not supported by browser. Tap <b>"Upload QR Image"</b> below!';
     }
     return;
   }
 
-  hint.innerHTML = '⏳ Starting camera stream... Please tap <b>Allow</b> if prompted!';
+  hint.innerHTML = 'Starting camera stream... Please tap <b>Allow</b> if prompted!';
 
   html5QrScanner = new Html5Qrcode('scannerRegion');
   const qrConfig = {
@@ -1334,11 +1429,11 @@ async function openScanner(fillFieldId, thenOpenSheet) {
     } catch (camErr) {}
     
     if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
-      hint.innerHTML = '⚠️ <b>Camera Permission Denied:</b> Please grant camera access in browser site settings.<br><br>Or tap <b>"📷 Upload QR Photo / Image"</b> below!';
+      hint.innerHTML = ' <b>Camera Permission Denied:</b> Please grant camera access in browser site settings.<br><br>Or tap <b>"Upload QR Image"</b> below!';
     } else if (!isSecure) {
-      hint.innerHTML = '💡 <b>HTTP Context:</b> Live camera stream blocked on plain HTTP.<br><b>Tap "Upload QR Photo" below</b> to select/snap a QR picture!';
+      hint.innerHTML = ' <b>HTTP Context:</b> Live camera stream blocked on plain HTTP.<br><b>Tap "Upload QR Photo" below</b> to select/snap a QR picture!';
     } else {
-      hint.innerHTML = '💡 <b>Camera stream error:</b> Camera unavailable.<br><b>Tap "Upload QR Photo" below</b> to scan from gallery!';
+      hint.innerHTML = ' <b>Camera stream error:</b> Camera unavailable.<br><b>Tap "Upload QR Photo" below</b> to scan from gallery!';
     }
   }
 }
@@ -1372,7 +1467,7 @@ function handleQrImageUpload(input) {
     })
     .catch(err => {
       fileScanner.clear();
-      hint.innerHTML = '⚠️ Could not detect a valid QR code in that photo.<br>Please select a clearer image or paste address directly.';
+      hint.innerHTML = ' Could not detect a valid QR code in that photo.<br>Please select a clearer image or paste address directly.';
       showAlert('No QR code detected in photo', true);
     });
 }
@@ -1478,7 +1573,7 @@ function renderOfflineQueue() {
     const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '';
     html += '<div class="list-row" style="padding:10px 12px; background:var(--surface-2); border-radius:8px; margin-bottom:4px;">' +
       '<div class="row-main">' +
-        '<div class="row-title" style="font-size:0.8rem;">' + (isPcn ? '⚡ PCN Off-Chain' : '💸 Direct Tx') +
+        '<div class="row-title" style="font-size:0.8rem;">' + (isPcn ? 'PCN Off-Chain' : 'Direct Transfer') +
           ' <span class="badge badge-pending" style="font-size:0.6rem;">' + (item.status || 'Pending Sync') + '</span></div>' +
         '<div class="row-sub" style="font-size:0.74rem;">' + targetLabel + (item.sequence ? ' (Seq ' + item.sequence + ')' : '') + ' • ' + timeStr + '</div>' +
       '</div>' +
@@ -1679,40 +1774,65 @@ async function submitOfflinePaymentForm(e) {
     };
   }
 
-  // Request cryptographic Ed25519 signature from node wallet
-  try {
-    const signRes = await postData('/api/v1/wallet/sign-offline', {
-      type: payType,
-      channel_id: item.channel_id,
-      sequence: item.sequence,
-      balance_a: item.balance_a,
-      balance_b: item.balance_b,
-      receiver: item.receiver,
-      amount: item.amount,
-      nonce: item.nonce
-    });
-    if (signRes && signRes.signature && signRes.public_key) {
-      item.signature = signRes.signature;
-      item.public_key = signRes.public_key;
-      if (signRes.sender && payType === 'direct') {
-        item.sender = signRes.sender;
+  // 1. Attempt client-side offline signature via TweetNaCl if available
+  if (window.nacl) {
+    try {
+      const clientKp = await getOrCreateClientKeypair();
+      if (clientKp) {
+        let hashBytes;
+        if (payType === 'pcn') {
+          const msg = item.channel_id + '|' + item.sequence + '|' + item.balance_a + '|' + item.balance_b;
+          const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+          hashBytes = new Uint8Array(hashBuf);
+        } else {
+          item.sender = clientKp.address;
+          const msg = item.sender + '|' + item.receiver + '|' + item.amount + '|' + item.nonce;
+          const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+          hashBytes = new Uint8Array(hashBuf);
+        }
+        const sig = nacl.sign.detached(hashBytes, clientKp.secretKey);
+        item.signature = bytesToHex(sig);
+        item.public_key = bytesToHex(clientKp.publicKey);
       }
+    } catch (localSignErr) {
+      console.warn('Local client signing error:', localSignErr);
     }
-  } catch (signErr) {
-    console.warn('Offline signature generation error:', signErr);
+  }
+
+  // 2. Fallback to node wallet signing if online and not yet signed
+  if (!item.signature || !item.public_key) {
+    try {
+      const signRes = await postData('/api/v1/wallet/sign-offline', {
+        type: payType,
+        channel_id: item.channel_id,
+        sequence: item.sequence,
+        balance_a: item.balance_a,
+        balance_b: item.balance_b,
+        receiver: item.receiver,
+        amount: item.amount,
+        nonce: item.nonce
+      });
+      if (signRes && signRes.signature && signRes.public_key) {
+        item.signature = signRes.signature;
+        item.public_key = signRes.public_key;
+        if (signRes.sender && payType === 'direct') {
+          item.sender = signRes.sender;
+        }
+      }
+    } catch (signErr) {
+      console.warn('Node wallet signing error:', signErr);
+    }
   }
 
   if (!item.signature || !item.public_key) {
-    showAlert('Failed to cryptographically sign offline transaction with node wallet', true);
+    showAlert('Failed to cryptographically sign payment payload.', true);
     return;
   }
 
-  // Queue item in localStorage
-  const queue = getOfflineQueue();
-  queue.push(item);
-  saveOfflineQueue(queue);
+  // 3. Render Offline Payment QR code for air-gapped P2P relay
+  renderOfflinePaymentQr(item);
 
-  // If BLE characteristic is available, write directly over GATT
+  // 4. If BLE characteristic is available, write directly over GATT
   const payloadStr = JSON.stringify(item);
   if (activeBleCharacteristic) {
     try {
@@ -1725,11 +1845,27 @@ async function submitOfflinePaymentForm(e) {
     } catch (err) {}
   }
 
-  // Also broadcast over local node BLE transport driver
-  await postData('/api/v1/transport/broadcast-offline', { payload: payloadStr }).catch(() => {});
+  // 5. Attempt immediate synchronization if host node is currently reachable
+  let alreadySynced = false;
+  try {
+    const bRes = await postData('/api/v1/transport/broadcast-offline', { payload: payloadStr });
+    if (bRes && (bRes.status === 'offline_pcn_synced' || bRes.status === 'offline_tx_validated' || bRes.status === 'relayed_over_bluetooth')) {
+      alreadySynced = true;
+    }
+  } catch (syncErr) {
+    // Node is currently unreachable (true offline scenario)
+  }
 
-  showAlert('Offline payment signed & queued! (' + amount + ' LQD) ⚡ Ready to push to Host.');
-  switchSubpanel('subBleQueue', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[2], 'sheetBluetooth');
+  if (alreadySynced) {
+    showAlert('Payment signed and validated by Host node (' + amount + ' LQD)');
+    refreshDashboardData();
+  } else {
+    // Buffer locally in outbox queue when offline
+    const queue = getOfflineQueue();
+    queue.push(item);
+    saveOfflineQueue(queue);
+    showAlert('Offline mode: Payment signed and queued locally (' + amount + ' LQD). Present QR code to receiver.');
+  }
 }
 
 async function pushOfflineQueueToHost() {
@@ -1741,6 +1877,9 @@ async function pushOfflineQueueToHost() {
 
   const hostUrlInput = document.getElementById('bleHostUrl');
   let hostUrl = (hostUrlInput && hostUrlInput.value.trim()) || window.location.origin;
+  if (!/^https?:\/\//i.test(hostUrl)) {
+    hostUrl = 'http://' + hostUrl;
+  }
   hostUrl = hostUrl.replace(/\/+$/, '');
 
   const btn = document.getElementById('btnPushHost');
@@ -1750,6 +1889,7 @@ async function pushOfflineQueueToHost() {
 
   let successCount = 0;
   let remaining = [];
+  let lastError = '';
 
   for (const item of queue) {
     try {
@@ -1779,6 +1919,7 @@ async function pushOfflineQueueToHost() {
         remaining.push(item);
       }
     } catch (err) {
+      lastError = err.message || (typeof err === 'string' ? err : 'Connection error');
       remaining.push(item);
     }
   }
@@ -1788,9 +1929,9 @@ async function pushOfflineQueueToHost() {
   refreshDashboardData();
 
   if (successCount > 0) {
-    showAlert('Successfully pushed & validated ' + successCount + ' payments on Host node! 🚀');
+    showAlert('Successfully pushed & validated ' + successCount + ' payments on Host node! ');
   } else {
-    showAlert('Failed to connect or validate with Host. Ensure Host is reachable at ' + hostUrl, true);
+    showAlert('Validation failed with Host (' + hostUrl + '): ' + (lastError || 'Ensure Host is reachable'), true);
   }
 }
 
@@ -2674,6 +2815,164 @@ function initAvatars() {
 }
 
 document.addEventListener('DOMContentLoaded', initAvatars);
+
+/* ---------- Offline P2P Payment QR Generation & Camera Scanning ---------- */
+function renderOfflinePaymentQr(item) {
+  const card = document.getElementById('offlinePaymentQrCard');
+  const canvas = document.getElementById('offlinePaymentQrCanvas');
+  const details = document.getElementById('offlineQrDetails');
+  if (!card || !canvas) return;
+
+  canvas.innerHTML = '';
+  const payloadStr = JSON.stringify(item);
+  new QRCode(canvas, {
+    text: payloadStr,
+    width: 210,
+    height: 210,
+    colorDark: "#090d16",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  const isPcn = item.type === 'pcn_offline_payment' || !!item.channel_id;
+  if (details) {
+    details.textContent = isPcn
+      ? 'Channel Payment: ' + item.amount + ' LQD (Sequence ' + item.sequence + ')'
+      : 'Direct Transfer: ' + item.amount + ' LQD to ' + (item.receiver || '').slice(0, 10) + '...';
+  }
+  card.style.display = 'block';
+}
+
+function dismissOfflinePaymentQr() {
+  const card = document.getElementById('offlinePaymentQrCard');
+  if (card) card.style.display = 'none';
+}
+
+let offlineQrScanner = null;
+
+async function startOfflinePaymentScan() {
+  const btnStart = document.getElementById('btnStartOfflineScan');
+  const btnStop = document.getElementById('btnStopOfflineScan');
+  if (!window.Html5Qrcode) {
+    showAlert('Camera scanner loading, please wait...', true);
+    return;
+  }
+  if (offlineQrScanner) {
+    try { await offlineQrScanner.stop(); } catch(e) {}
+    try { offlineQrScanner.clear(); } catch(e) {}
+    offlineQrScanner = null;
+  }
+  offlineQrScanner = new Html5Qrcode('offlineScannerRegion');
+  try {
+    await offlineQrScanner.start(
+      { facingMode: { ideal: 'environment' } },
+      { fps: 15, qrbox: { width: 220, height: 220 } },
+      onOfflineQrScanSuccess,
+      () => {}
+    );
+    if (btnStart) btnStart.style.display = 'none';
+    if (btnStop) btnStop.style.display = 'block';
+  } catch (err) {
+    showAlert('Could not start camera: ' + (err.message || 'Check camera permissions'), true);
+  }
+}
+
+async function stopOfflinePaymentScan() {
+  const btnStart = document.getElementById('btnStartOfflineScan');
+  const btnStop = document.getElementById('btnStopOfflineScan');
+  if (offlineQrScanner) {
+    try { await offlineQrScanner.stop(); } catch(e) {}
+    try { offlineQrScanner.clear(); } catch(e) {}
+    offlineQrScanner = null;
+  }
+  if (btnStart) btnStart.style.display = 'block';
+  if (btnStop) btnStop.style.display = 'none';
+}
+
+async function onOfflineQrScanSuccess(decodedText) {
+  stopOfflinePaymentScan();
+  try {
+    const item = JSON.parse(decodedText);
+    if (!item || !item.signature || !item.public_key) {
+      showAlert('Invalid offline payment QR code', true);
+      return;
+    }
+
+    // Verify cryptographic Ed25519 signature offline
+    if (window.nacl) {
+      const pubBytes = hexToBytes(item.public_key);
+      const sigBytes = hexToBytes(item.signature);
+      let hashBytes;
+      if (item.type === 'pcn_offline_payment' || item.channel_id) {
+        const msg = item.channel_id + '|' + item.sequence + '|' + item.balance_a + '|' + item.balance_b;
+        const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+        hashBytes = new Uint8Array(hashBuf);
+      } else {
+        const msg = item.sender + '|' + item.receiver + '|' + item.amount + '|' + item.nonce;
+        const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+        hashBytes = new Uint8Array(hashBuf);
+      }
+
+      const verified = nacl.sign.detached.verify(hashBytes, sigBytes, pubBytes);
+      if (!verified) {
+        showAlert('Cryptographic signature verification failed on offline payment!', true);
+        return;
+      }
+    }
+
+    // Update local state channel balances if PCN
+    if (item.channel_id) {
+      let channels = [];
+      try {
+        channels = JSON.parse(localStorage.getItem(getStorageKey('pcn_channels'))) || [];
+      } catch(e) {}
+      let ch = channels.find(c => c.id === item.channel_id);
+      if (ch) {
+        ch.sequence = item.sequence;
+        if (ch.share) {
+          ch.share.balance_party_a = item.balance_a;
+          ch.share.balance_party_b = item.balance_b;
+        }
+        localStorage.setItem(getStorageKey('pcn_channels'), JSON.stringify(channels));
+      }
+    }
+
+    // Add signed statement to receiver's outbox queue to push when reconnected
+    const queue = getOfflineQueue();
+    const exists = queue.some(q => q.signature === item.signature);
+    if (!exists) {
+      item.received_offline = true;
+      item.status = 'Pending Host Sync';
+      queue.push(item);
+      saveOfflineQueue(queue);
+    }
+
+    showAlert('Verified offline payment received! +' + item.amount + ' LQD (Seq ' + (item.sequence || 1) + ')');
+    refreshDashboardData();
+    switchSubpanel('subBleQueue', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[3], 'sheetBluetooth');
+  } catch (err) {
+    showAlert('Failed to process offline payment: ' + (err.message || 'Invalid format'), true);
+  }
+}
+
+function handleOfflineQrImageUpload(input) {
+  if (!input.files || input.files.length === 0) return;
+  const file = input.files[0];
+  if (!window.Html5Qrcode) {
+    showAlert('QR scanner loading, please wait...', true);
+    return;
+  }
+  const fileScanner = new Html5Qrcode('offlineScannerRegion');
+  fileScanner.scanFile(file, true)
+    .then(text => {
+      fileScanner.clear();
+      onOfflineQrScanSuccess(text);
+    })
+    .catch(() => {
+      fileScanner.clear();
+      showAlert('No valid offline payment QR code found in image', true);
+    });
+}
 </script>
 </body>
 </html>`
