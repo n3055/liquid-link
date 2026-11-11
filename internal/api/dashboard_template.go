@@ -1261,9 +1261,88 @@ function hexToBytes(hex) {
   return bytes;
 }
 
+// Synchronous SHA-256 digest computation (RFC 6234 compliant)
+function sha256Sync(data) {
+  const K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+
+  let H0 = 0x6a09e667, H1 = 0xbb67ae85, H2 = 0x3c6ef372, H3 = 0xa54ff53a;
+  let H4 = 0x510e527f, H5 = 0x9b05688c, H6 = 0x1f83d9ab, H7 = 0x5be0cd19;
+
+  const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const l = input.length;
+  const bitLen = l * 8;
+  const newLen = ((l + 8) >> 6 << 6) + 64;
+  const buf = new Uint8Array(newLen);
+  buf.set(input);
+  buf[l] = 0x80;
+
+  const view = new DataView(buf.buffer);
+  view.setUint32(newLen - 4, bitLen, false);
+
+  const W = new Int32Array(64);
+  for (let i = 0; i < newLen; i += 64) {
+    for (let t = 0; t < 16; t++) {
+      W[t] = view.getInt32(i + t * 4, false);
+    }
+    for (let t = 16; t < 64; t++) {
+      const s0 = ((W[t-15] >>> 7) | (W[t-15] << 25)) ^ ((W[t-15] >>> 18) | (W[t-15] << 14)) ^ (W[t-15] >>> 3);
+      const s1 = ((W[t-2] >>> 17) | (W[t-2] << 15)) ^ ((W[t-2] >>> 19) | (W[t-2] << 13)) ^ (W[t-2] >>> 10);
+      W[t] = (W[t-16] + s0 + W[t-7] + s1) | 0;
+    }
+
+    let a = H0, b = H1, c = H2, d = H3, e = H4, f = H5, g = H6, h = H7;
+    for (let t = 0; t < 64; t++) {
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const ch = (e & f) ^ ((~e) & g);
+      const temp1 = (h + S1 + ch + K[t] + W[t]) | 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) | 0;
+
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) | 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) | 0;
+    }
+
+    H0 = (H0 + a) | 0;
+    H1 = (H1 + b) | 0;
+    H2 = (H2 + c) | 0;
+    H3 = (H3 + d) | 0;
+    H4 = (H4 + e) | 0;
+    H5 = (H5 + f) | 0;
+    H6 = (H6 + g) | 0;
+    H7 = (H7 + h) | 0;
+  }
+
+  const out = new Uint8Array(32);
+  const outView = new DataView(out.buffer);
+  outView.setUint32(0, H0, false);
+  outView.setUint32(4, H1, false);
+  outView.setUint32(8, H2, false);
+  outView.setUint32(12, H3, false);
+  outView.setUint32(16, H4, false);
+  outView.setUint32(20, H5, false);
+  outView.setUint32(24, H6, false);
+  outView.setUint32(28, H7, false);
+  return out;
+}
+
 async function deriveAddressFromPub(pubBytes) {
-  const hash = await crypto.subtle.digest('SHA-256', pubBytes);
-  const hashBytes = new Uint8Array(hash);
+  const hashBytes = sha256Sync(pubBytes);
   return '0x' + bytesToHex(hashBytes.slice(0, 20));
 }
 
@@ -1298,7 +1377,11 @@ function showAlert(msg, isError) {
   const box = document.getElementById('alertBox');
   box.className = (isError ? 'alert-danger' : 'alert-success');
   box.textContent = msg;
-  requestAnimationFrame(() => box.classList.add('show'));
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => box.classList.add('show'));
+  } else {
+    box.classList.add('show');
+  }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => box.classList.remove('show'), 4200);
 }
@@ -1356,6 +1439,13 @@ function switchSubpanel(id, btn, scope) {
   root.querySelectorAll('.sheet-subpanel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById(id).classList.add('active');
+  if (scope === 'sheetBluetooth') {
+    if (id === 'subBleReceive') {
+      startOfflinePaymentScan();
+    } else {
+      stopOfflinePaymentScan();
+    }
+  }
 }
 
 function openVerifySheet(utr) {
@@ -1539,13 +1629,17 @@ async function openScanner(fillFieldId, thenOpenSheet) {
 
 function onQrScanSuccess(decodedText) {
   // Check if scanned QR is an offline payment payload
-  if (decodedText && (decodedText.startsWith('{') || decodedText.startsWith('%7B'))) {
+  if (decodedText) {
     try {
-      const parsed = JSON.parse(decodedText.startsWith('%7B') ? decodeURIComponent(decodedText) : decodedText);
-      if (parsed.signature && (parsed.channel_id || parsed.type === 'pcn_offline_payment' || parsed.type === 'direct_transfer')) {
-        closeSheetAndStopScan();
-        onOfflineQrScanSuccess(JSON.stringify(parsed));
-        return;
+      let raw = typeof decodedText === 'string' ? decodedText.trim() : '';
+      if (raw.startsWith('%7B')) raw = decodeURIComponent(raw);
+      if ((raw.startsWith('{') && raw.endsWith('}')) || typeof decodedText === 'object') {
+        const parsed = typeof decodedText === 'object' ? decodedText : JSON.parse(raw);
+        if (parsed && parsed.signature && (parsed.channel_id || parsed.type === 'pcn_offline_payment' || parsed.type === 'direct_tx_offline' || parsed.type === 'direct_transfer' || parsed.receiver)) {
+          closeSheetAndStopScan();
+          onOfflineQrScanSuccess(parsed);
+          return;
+        }
       }
     } catch (_) {}
   }
@@ -1555,7 +1649,7 @@ function onQrScanSuccess(decodedText) {
   }
   closeSheetAndStopScan();
   if (currentNextSheet) openSheet(currentNextSheet);
-  showAlert('Address captured: ' + decodedText.substring(0, 16) + '...');
+  showAlert('Address captured: ' + String(decodedText).substring(0, 16) + '...');
 }
 
 async function handleQrImageUpload(input) {
@@ -1727,13 +1821,9 @@ function getOfflineQueueStorageKey(addr) {
   return getStorageKey('offline_queue_' + (target || '').toLowerCase());
 }
 
-let activeBleDevice = null;
-let activeBleServer = null;
-let activeBleCharacteristic = null;
-
-function getOfflineQueue() {
+function getCachedWalletOfflineQueue(addr) {
   try {
-    const raw = localStorage.getItem(getOfflineQueueStorageKey());
+    const raw = localStorage.getItem(getOfflineQueueStorageKey(addr));
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
@@ -1742,9 +1832,26 @@ function getOfflineQueue() {
   return [];
 }
 
+function saveWalletOfflineQueue(addr, queue) {
+  const target = addr || getActiveWallet();
+  try {
+    localStorage.setItem(getOfflineQueueStorageKey(target), JSON.stringify(queue || []));
+  } catch (e) {}
+  if (target && target.toLowerCase() === (getActiveWallet() || '').toLowerCase()) {
+    renderOfflineQueue();
+  }
+}
+
+let activeBleDevice = null;
+let activeBleServer = null;
+let activeBleCharacteristic = null;
+
+function getOfflineQueue() {
+  return getCachedWalletOfflineQueue(getActiveWallet());
+}
+
 function saveOfflineQueue(queue) {
-  localStorage.setItem(getOfflineQueueStorageKey(), JSON.stringify(queue));
-  renderOfflineQueue();
+  saveWalletOfflineQueue(getActiveWallet(), queue);
 }
 
 function renderOfflineQueue() {
@@ -1973,13 +2080,11 @@ async function submitOfflinePaymentForm(e) {
         let hashBytes;
         if (payType === 'pcn') {
           const msg = item.channel_id + '|' + item.sequence + '|' + item.balance_a + '|' + item.balance_b;
-          const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
-          hashBytes = new Uint8Array(hashBuf);
+          hashBytes = sha256Sync(msg);
         } else {
           item.sender = clientKp.address;
           const msg = item.sender + '|' + item.receiver + '|' + item.amount + '|' + item.nonce;
-          const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
-          hashBytes = new Uint8Array(hashBuf);
+          hashBytes = sha256Sync(msg);
         }
         const sig = nacl.sign.detached(hashBytes, clientKp.secretKey);
         item.signature = bytesToHex(sig);
@@ -3238,10 +3343,7 @@ async function startOfflinePaymentScan() {
   if (hint) hint.innerHTML = 'Starting camera stream... Point at payer QR code.';
 
   offlineQrScanner = new Html5Qrcode('offlineScannerRegion', {
-    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined,
-    experimentalFeatures: {
-      useBarCodeDetectorIfSupported: true
-    }
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined
   });
 
   const qrConfig = {
@@ -3250,17 +3352,12 @@ async function startOfflinePaymentScan() {
       const minEdge = Math.min(w, h);
       const edge = Math.max(160, Math.floor(minEdge * 0.85));
       return { width: edge, height: edge };
-    },
-    videoConstraints: {
-      facingMode: { ideal: "environment" },
-      width: { min: 640, ideal: 1280 },
-      height: { min: 480, ideal: 720 }
     }
   };
 
   try {
     await offlineQrScanner.start(
-      { facingMode: { ideal: 'environment' } },
+      { facingMode: 'environment' },
       qrConfig,
       onOfflineQrScanSuccess,
       () => {}
@@ -3310,27 +3407,30 @@ async function onOfflineQrScanSuccess(decodedText) {
   }
   stopOfflinePaymentScan();
   try {
-    let raw = (decodedText || '').trim();
-    if (raw.startsWith('%7B')) raw = decodeURIComponent(raw);
-    const item = JSON.parse(raw);
+    let item;
+    if (typeof decodedText === 'object' && decodedText !== null) {
+      item = decodedText;
+    } else {
+      let raw = (decodedText || '').trim();
+      if (raw.startsWith('%7B')) raw = decodeURIComponent(raw);
+      item = JSON.parse(raw);
+    }
     if (!item || !item.signature || !item.public_key) {
       showAlert('Invalid offline payment QR code', true);
       return;
     }
 
-    // Verify cryptographic Ed25519 signature offline
+    // Verify cryptographic Ed25519 signature offline using sha256Sync
     if (window.nacl) {
       const pubBytes = hexToBytes(item.public_key);
       const sigBytes = hexToBytes(item.signature);
       let hashBytes;
       if (item.type === 'pcn_offline_payment' || item.channel_id) {
         const msg = item.channel_id + '|' + item.sequence + '|' + item.balance_a + '|' + item.balance_b;
-        const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
-        hashBytes = new Uint8Array(hashBuf);
+        hashBytes = sha256Sync(msg);
       } else {
         const msg = item.sender + '|' + item.receiver + '|' + item.amount + '|' + item.nonce;
-        const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
-        hashBytes = new Uint8Array(hashBuf);
+        hashBytes = sha256Sync(msg);
       }
 
       const verified = nacl.sign.detached.verify(hashBytes, sigBytes, pubBytes);
@@ -3348,15 +3448,30 @@ async function onOfflineQrScanSuccess(decodedText) {
       if (ch) {
         ch.sequence = item.sequence;
         if (ch.share) {
-          ch.share.balance_party_a = item.balance_a;
-          ch.share.balance_party_b = item.balance_b;
+          ch.share.balance_party_a = Number(item.balance_a);
+          ch.share.balance_party_b = Number(item.balance_b);
         }
-        saveWalletChannels(activeUser, channels);
-        renderChannelsList(channels);
+      } else {
+        ch = {
+          id: item.channel_id,
+          party_a: item.party_a || item.sender,
+          party_b: item.party_b || activeUser,
+          state: 'OPEN',
+          sequence: item.sequence || 1,
+          share: {
+            balance_party_a: Number(item.balance_a),
+            balance_party_b: Number(item.balance_b)
+          }
+        };
+        channels.push(ch);
       }
+      saveWalletChannels(activeUser, channels);
+      renderChannelsList(channels);
     } else {
       const currentHoldings = getCachedWalletHoldings(activeUser) || { balance: 1000, inr_balance: 1000 };
-      currentHoldings.balance = (currentHoldings.balance || 0) + item.amount;
+      const amt = Number(item.amount) || 0;
+      currentHoldings.balance = (Number(currentHoldings.balance) || 0) + amt;
+      currentHoldings.inr_balance = (Number(currentHoldings.inr_balance) || 0) + amt;
       saveWalletHoldings(activeUser, currentHoldings);
       const heroBalEl = document.getElementById('heroTotalBalance');
       if (heroBalEl) heroBalEl.innerHTML = currentHoldings.balance + '<small>LQD</small>';
@@ -3372,9 +3487,12 @@ async function onOfflineQrScanSuccess(decodedText) {
       saveOfflineQueue(queue);
     }
 
-    showAlert('Verified offline payment received! +' + item.amount + ' LQD (Seq ' + (item.sequence || 1) + ')');
+    showAlert('Verified offline payment received! +' + item.amount + ' LQD' + (item.sequence ? ' (Seq ' + item.sequence + ')' : ''));
     refreshDashboardData();
-    switchSubpanel('subBleQueue', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[3], 'sheetBluetooth');
+    const sheetBt = document.getElementById('sheetBluetooth');
+    if (sheetBt && sheetBt.classList.contains('open')) {
+      switchSubpanel('subBleQueue', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[3], 'sheetBluetooth');
+    }
   } catch (err) {
     showAlert('Failed to process offline payment: ' + (err.message || 'Invalid format'), true);
   } finally {
@@ -3400,10 +3518,9 @@ async function handleOfflineQrImageUpload(input) {
     return;
   }
   const fileScanner = new Html5Qrcode('offlineScannerRegion', {
-    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined,
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined
   });
-  fileScanner.scanFile(file, true)
+  fileScanner.scanFile(file, false)
     .then(text => {
       fileScanner.clear();
       input.value = '';
