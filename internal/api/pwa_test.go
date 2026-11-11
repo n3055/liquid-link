@@ -54,3 +54,28 @@ func TestServer_ServiceWorkerEndpoint(t *testing.T) {
 		t.Errorf("service worker missing cache logic: %s", body)
 	}
 }
+
+// [PWA] TestServer_IconEndpoints verifies PNG raster app icon delivery and content types.
+func TestServer_IconEndpoints(t *testing.T) {
+	s, _, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	for _, path := range []string{"/icon-192.png", "/icon-512.png"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK for %s, got %d", path, rr.Code)
+		}
+
+		contentType := rr.Header().Get("Content-Type")
+		if !strings.Contains(contentType, "image/png") {
+			t.Errorf("expected image/png content type for %s, got %s", path, contentType)
+		}
+
+		if rr.Body.Len() < 100 {
+			t.Errorf("expected valid PNG binary for %s, got len %d", path, rr.Body.Len())
+		}
+	}
+}

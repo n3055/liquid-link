@@ -104,6 +104,8 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/ui", s.handleDashboard)
 	s.router.Get("/manifest.json", s.handleManifest)
 	s.router.Get("/sw.js", s.handleServiceWorker)
+	s.router.Get("/icon-192.png", s.handleIcon192)
+	s.router.Get("/icon-512.png", s.handleIcon512)
 
 	// API v1 Namespace
 	s.router.Route("/api/v1", func(r chi.Router) {

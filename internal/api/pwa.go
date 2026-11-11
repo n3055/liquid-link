@@ -1,13 +1,88 @@
 package api
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"net/http"
+	"sync"
 )
+
+var (
+	icon192Bytes []byte
+	icon512Bytes []byte
+	iconOnce     sync.Once
+)
+
+func initIcons() {
+	iconOnce.Do(func() {
+		icon192Bytes = generatePngIcon(192)
+		icon512Bytes = generatePngIcon(512)
+	})
+}
+
+// generatePngIcon builds a raster PNG app icon with dark background and cyan emblem.
+func generatePngIcon(size int) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	// Background #090d16
+	bg := color.RGBA{R: 9, G: 13, B: 22, A: 255}
+	draw.Draw(img, img.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
+
+	// Inner rounded border/accent diamond #38bdf8
+	accent := color.RGBA{R: 56, G: 189, B: 248, A: 255}
+	center := size / 2
+	radius := size * 3 / 8
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			dx := x - center
+			if dx < 0 {
+				dx = -dx
+			}
+			dy := y - center
+			if dy < 0 {
+				dy = -dy
+			}
+			// Diamond shape
+			if dx+dy <= radius && dx+dy >= radius-size/14 {
+				img.Set(x, y, accent)
+			}
+			// Center circle
+			if (x-center)*(x-center)+(y-center)*(y-center) <= (size/8)*(size/8) {
+				img.Set(x, y, accent)
+			}
+		}
+	}
+
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
+
+// [PWA] handleIcon192 serves the 192x192 raster PNG app icon for Android WebAPK installation.
+func (s *Server) handleIcon192(w http.ResponseWriter, r *http.Request) {
+	initIcons()
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(icon192Bytes)
+}
+
+// [PWA] handleIcon512 serves the 512x512 raster PNG splash icon for Android WebAPK installation.
+func (s *Server) handleIcon512(w http.ResponseWriter, r *http.Request) {
+	initIcons()
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(icon512Bytes)
+}
 
 // [PWA] handleManifest serves the Progressive Web App manifest.json for mobile installation.
 func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 	manifestJSON := `{
-  "name": "LiquidLink - Offline P2P Payment Network",
+  "id": "/",
+  "name": "LiquidLink Wallet",
   "short_name": "LiquidLink",
   "description": "Transport-agnostic off-chain payment network with offline BLE & QR state channel sync",
   "start_url": "/",
@@ -18,15 +93,15 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
   "theme_color": "#090d16",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192' fill='none'%3E%3Crect width='192' height='192' rx='42' fill='%230f172a'/%3E%3Cpath d='M96 36L44 76v70l52 40 52-40V76L96 36z' stroke='%2338bdf8' stroke-width='10' stroke-linejoin='round'/%3E%3Ccircle cx='96' cy='110' r='24' fill='%2338bdf8'/%3E%3C/svg%3E",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='none'%3E%3Crect width='512' height='512' rx='112' fill='%230f172a'/%3E%3Cpath d='M256 96L118 202v188l138 106 138-106V202L256 96z' stroke='%2338bdf8' stroke-width='24' stroke-linejoin='round'/%3E%3Ccircle cx='256' cy='292' r='64' fill='%2338bdf8'/%3E%3C/svg%3E",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
@@ -38,10 +113,12 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 
 // [PWA] handleServiceWorker serves the offline caching service worker script for standalone execution.
 func (s *Server) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
-	swScript := `const CACHE_NAME = 'liquidlink-app-v2';
+	swScript := `const CACHE_NAME = 'liquidlink-app-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js',
@@ -95,7 +172,6 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch fresh copy in background if network is active
         fetch(event.request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => {
@@ -115,7 +191,6 @@ self.addEventListener('fetch', (event) => {
         });
         return networkResponse;
       }).catch(() => {
-        // Fallback to cached root dashboard if available
         return caches.match('/');
       });
     })
