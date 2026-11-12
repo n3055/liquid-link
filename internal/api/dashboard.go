@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/n3055/liquid-link/internal/crypto"
 	"github.com/n3055/liquid-link/internal/orderbook"
 	"github.com/n3055/liquid-link/internal/pcn"
 	"github.com/n3055/liquid-link/internal/receipt"
@@ -46,20 +47,29 @@ type dashboardData struct {
 	TotalINRPool     float64
 }
 
-// [Dashboard] collectDashboardData gathers live system statistics across all node sub-services.
-func (s *Server) collectDashboardData(ctx context.Context) *dashboardData {
+// [Dashboard] collectDashboardData gathers live system statistics across all node sub-services,
+// scoped to the target user wallet if provided.
+func (s *Server) collectDashboardData(ctx context.Context, targetUser ...string) *dashboardData {
 	d := &dashboardData{
 		NodeID: s.cfg.ID,
 		Port:   s.cfg.Port,
 	}
 
-	if s.wallet != nil {
-		d.Address = string(s.wallet.Address())
+	activeUser := ""
+	if len(targetUser) > 0 && targetUser[0] != "" {
+		activeUser = targetUser[0]
+	} else if s.wallet != nil {
+		activeUser = string(s.wallet.Address())
 	}
+	d.Address = activeUser
+
+	userCryptoAddr := crypto.Address(activeUser)
 
 	if s.assetMgr != nil {
-		if b, err := s.assetMgr.BalanceOf(ctx, s.wallet.Address()); err == nil {
-			d.Balance = b
+		if activeUser != "" {
+			if b, err := s.assetMgr.BalanceOf(ctx, userCryptoAddr); err == nil {
+				d.Balance = b
+			}
 		}
 		if t, err := s.assetMgr.TotalSupply(ctx); err == nil {
 			d.TotalSupply = t
@@ -101,13 +111,33 @@ func (s *Server) collectDashboardData(ctx context.Context) *dashboardData {
 
 	if s.pcnRegistry != nil {
 		if chs, err := s.pcnRegistry.ListChannels(ctx); err == nil {
-			d.Channels = chs
+			if activeUser != "" {
+				var filtered []*pcn.Channel
+				for _, ch := range chs {
+					if ch != nil && (string(ch.Share.PartyA) == activeUser || string(ch.Share.PartyB) == activeUser) {
+						filtered = append(filtered, ch)
+					}
+				}
+				d.Channels = filtered
+			} else {
+				d.Channels = chs
+			}
 		}
 	}
 
 	if s.receiptRegistry != nil {
 		if mappings, err := s.receiptRegistry.ListUTRMapping(ctx); err == nil {
-			d.UTRMappings = mappings
+			if activeUser != "" {
+				var filtered []*receipt.UTRMapping
+				for _, m := range mappings {
+					if m != nil && string(m.Address) == activeUser {
+						filtered = append(filtered, m)
+					}
+				}
+				d.UTRMappings = filtered
+			} else {
+				d.UTRMappings = mappings
+			}
 		}
 	}
 
@@ -132,16 +162,15 @@ func (s *Server) collectDashboardData(ctx context.Context) *dashboardData {
 		d.TotalINRPool = poolRes
 	}
 
-	if s.wallet != nil {
-		userAddr := s.wallet.Address()
-		if acc, err := fiatM.GetAccount(ctx, userAddr); err == nil && acc != nil {
+	if activeUser != "" {
+		if acc, err := fiatM.GetAccount(ctx, userCryptoAddr); err == nil && acc != nil {
 			d.INRBalance = acc.Available
 			d.INRReserved = acc.Reserved
 		}
-		if stPos, err := stab.GetStakingPosition(ctx, userAddr); err == nil && stPos != nil {
+		if stPos, err := stab.GetStakingPosition(ctx, userCryptoAddr); err == nil && stPos != nil {
 			d.StakedShares = stPos.StakedShares
 		}
-		if bdPos, err := stab.GetBondPosition(ctx, userAddr); err == nil && bdPos != nil {
+		if bdPos, err := stab.GetBondPosition(ctx, userCryptoAddr); err == nil && bdPos != nil {
 			d.BondsHeld = bdPos.BondsHeld
 		}
 	}
@@ -171,7 +200,8 @@ func (s *Server) collectDashboardData(ctx context.Context) *dashboardData {
 
 // [Dashboard] handleDashboard processes HTTP requests to render the Web UI control panel.
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	d := s.collectDashboardData(r.Context())
+	userAddr := r.URL.Query().Get("address")
+	d := s.collectDashboardData(r.Context(), userAddr)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := renderDashboard(w, d); err != nil {

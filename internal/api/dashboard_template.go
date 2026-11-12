@@ -20,50 +20,65 @@ const dashboardHTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>LiquidLink Wallet</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#090d16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
 <style>
 :root {
-  --bg: #0c0d10;
-  --bg-elevated: #121317;
-  --surface: #17181d;
-  --surface-2: #1e2025;
-  --border: #2b2d34;
-  --border-soft: #1d1f24;
-  --text: #eceef1;
-  --text-dim: #989ba3;
-  --text-faint: #5f6269;
-  --accent: #4d84e2;
-  --accent-dim: #396bb8;
-  --accent-strong: #6d9bee;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(77,132,226,0.12);
-  --success: #45a374;
-  --success-soft: rgba(69,163,116,0.12);
-  --amber: #b98f45;
-  --amber-soft: rgba(185,143,69,0.14);
-  --red: #c96a6a;
-  --red-soft: rgba(201,106,106,0.14);
-  --radius-lg: 18px;
+  --bg: #090d16;
+  --bg-elevated: #0f172a;
+  --surface: #131b2e;
+  --surface-2: #1e293b;
+  --border: #243048;
+  --border-soft: #172136;
+  --text: #f8fafc;
+  --text-dim: #94a3b8;
+  --text-faint: #64748b;
+  --accent: #38bdf8;
+  --accent-dim: #0284c7;
+  --accent-strong: #7dd3fc;
+  --accent-ink: #041019;
+  --accent-soft: rgba(56, 189, 248, 0.12);
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.12);
+  --amber: #f59e0b;
+  --amber-soft: rgba(245, 158, 11, 0.14);
+  --red: #ef4444;
+  --red-soft: rgba(239, 68, 68, 0.14);
+  --radius-lg: 16px;
   --radius: 12px;
-  --radius-sm: 9px;
+  --radius-sm: 8px;
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace;
   --nav-h: 68px;
 }
-* { box-sizing: border-box; }
-html, body { height: 100%; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html {
+  height: 100%;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+}
 body {
+  height: 100%;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
   font-family: var(--font-body);
-  margin: 0;
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
-  padding-bottom: calc(var(--nav-h) + 60px);
+  padding-bottom: calc(var(--nav-h) + 80px + env(safe-area-inset-bottom));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -183,7 +198,14 @@ svg { display: block; }
 .avatar-btn svg { width: 100% !important; height: 100% !important; border-radius: 50% !important; display: block !important; }
 
 /* ---------- Layout ---------- */
-.container { max-width: 560px; margin: 0 auto; padding: 18px 18px 6px; }
+.container {
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding: 16px 16px calc(var(--nav-h) + 60px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
 
 /* ---------- Hero balance card ---------- */
 .hero { position: relative; border-radius: var(--radius-lg); margin-bottom: 18px; border: 1px solid var(--border); background: var(--surface); }
@@ -211,8 +233,33 @@ svg { display: block; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 600; color: var(--success); }
 
 /* ---------- Segmented control ---------- */
-.segment { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px; padding: 4px; margin-bottom: 14px; }
-.segment button { flex: 1; border: none; background: none; padding: 9px 6px; border-radius: 9px; font-size: 0.82rem; font-weight: 600; color: var(--text-dim); cursor: pointer; }
+.segment {
+  display: flex;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+.segment::-webkit-scrollbar { display: none; }
+.segment button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  border: none;
+  background: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
 .segment button.active { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 
 .panel { display: none; }
@@ -273,7 +320,19 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 .overlay { position: fixed; inset: 0; background: rgba(4,5,8,0.65); backdrop-filter: blur(3px); z-index: 100; display: none; align-items: flex-end; justify-content: center; }
 .overlay.open { display: flex; }
 @media (min-width: 620px) { .overlay { align-items: center; } }
-.sheet { background: var(--bg-elevated); border: 1px solid var(--border); width: 100%; max-width: 480px; border-radius: 22px 22px 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); max-height: 88vh; overflow-y: auto; animation: rise 0.22s ease; }
+.sheet {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 500px;
+  border-radius: 22px 22px 0 0;
+  padding: 20px 20px calc(48px + env(safe-area-inset-bottom));
+  max-height: 86vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  animation: rise 0.22s ease;
+}
 @media (min-width: 620px) { .sheet { border-radius: 22px; margin: 16px; } }
 @keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 4px; margin: 0 auto 14px; }
@@ -294,11 +353,11 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
 /* Scanner */
 .scan-frame { position: relative; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 1/1; margin-bottom: 14px; min-height: 260px; }
-#scannerRegion { width: 100% !important; height: 100% !important; min-height: 260px; display: flex; align-items: center; justify-content: center; }
-#scannerRegion video { width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 16px; display: block !important; }
-#scannerRegion canvas { display: none !important; }
-#scannerRegion img { width: 100% !important; height: 100% !important; object-fit: contain !important; }
-.scan-frame::after { content: ""; position: absolute; inset: 14%; border: 1.5px solid rgba(255,255,255,0.6); border-radius: 16px; box-shadow: 0 0 0 999px rgba(0,0,0,0.4); pointer-events: none; }
+#scannerRegion, #offlineScannerRegion { width: 100% !important; height: 100% !important; min-height: 260px; display: flex; align-items: center; justify-content: center; }
+#scannerRegion video, #offlineScannerRegion video { width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: 16px; display: block !important; }
+#scannerRegion canvas, #offlineScannerRegion canvas { display: none !important; }
+#scannerRegion img, #offlineScannerRegion img { width: 100% !important; height: 100% !important; object-fit: contain !important; }
+.scan-frame::after { content: ""; position: absolute; inset: 10%; border: 2px solid rgba(56,189,248,0.85); border-radius: 16px; box-shadow: 0 0 0 999px rgba(0,0,0,0.45); pointer-events: none; }
 
 /* Profile drawer */
 .profile-avatar-lg { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); border: 2px solid var(--border); overflow: hidden; }
@@ -387,9 +446,9 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
     <p class="welcome-sub">Decentralized Peer-to-Peer Settlement & Seigniorage Liquidity Protocol</p>
 
     <div class="welcome-features">
-      <div class="feat-item"><span class="feat-icon">⚡</span><span>Instant P2P State Channel Payments</span></div>
-      <div class="feat-item"><span class="feat-icon">🛡️</span><span>Algorithmic Seigniorage INR Peg Stability</span></div>
-      <div class="feat-item"><span class="feat-icon">📈</span><span>Real-Time Limit Orderbook Exchange</span></div>
+      <div class="feat-item"><span class="feat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span><span>Instant P2P State Channel Payments</span></div>
+      <div class="feat-item"><span class="feat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span>Algorithmic Seigniorage INR Peg Stability</span></div>
+      <div class="feat-item"><span class="feat-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span><span>Real-Time Limit Orderbook Exchange</span></div>
     </div>
 
     <div class="welcome-actions">
@@ -403,9 +462,11 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 <div class="celebration-overlay" id="celebrationModal" style="display:none;">
   <div class="confetti-container" id="confettiContainer"></div>
   <div class="celebration-card">
-    <div class="celebration-icon">🥳</div>
-    <h2 style="margin:0 0 4px; font-size:1.4rem;">Wallet Created!</h2>
-    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:14px;">Your new Web3 wallet session is active and funded on LiquidLink testnet.</p>
+    <div class="celebration-icon" style="display:flex; justify-content:center; align-items:center; margin-bottom:10px;">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+    </div>
+    <h2 style="margin:0 0 4px; font-size:1.35rem; font-weight:700;">Wallet Created</h2>
+    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:14px;">Your Web3 wallet session is active and funded on LiquidLink.</p>
     
     <div class="cel-avatar" id="celAvatar"></div>
     <div class="cel-address" id="celAddressText"></div>
@@ -421,7 +482,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       </div>
     </div>
 
-    <button class="btn btn-primary" onclick="dismissCelebrationModal()" style="width:100%; margin-top:16px;">Launch Dashboard 🚀</button>
+    <button class="btn btn-primary" onclick="dismissCelebrationModal()" style="width:100%; margin-top:16px;">Enter Dashboard</button>
   </div>
 </div>
 
@@ -470,21 +531,25 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         </button>
       </div>
 
-      <div class="quick-actions">
+      <div class="quick-actions" style="display:grid; grid-template-columns: repeat(5, 1fr); gap:8px;">
         <button class="qa-btn" onclick="createNewWalletUI()">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
-          <span>New Wallet</span>
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
+          <span>New</span>
         </button>
         <button class="qa-btn" onclick="openSheet('sheetSend')">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 12h16M14 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12h16M14 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span>Send</span>
         </button>
         <button class="qa-btn" onclick="openReceive()">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z" fill="currentColor"/></svg></span>
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM14 19h2v2h-2zM19 19h2v2h-2z" fill="currentColor"/></svg></span>
           <span>Receive</span>
         </button>
+        <button class="qa-btn" onclick="openSheet('sheetBluetooth')">
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span>Offline</span>
+        </button>
         <button class="qa-btn" onclick="openScanner('sendReceiver', 'sheetSend')">
-          <span class="qa-circle"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4 12h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.4"/></svg></span>
+          <span class="qa-circle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4 12h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="1 3.4"/></svg></span>
           <span>Scan</span>
         </button>
       </div>
@@ -717,7 +782,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
       <!-- Economist Design Explanation -->
       <div style="margin:16px; background:linear-gradient(135deg, rgba(77,132,226,0.1), rgba(129,140,248,0.1)); border:1px solid var(--accent-soft); border-radius:12px; padding:16px;">
-        <h4 style="font-size:0.9rem; color:var(--accent-strong); margin-bottom:6px;">⚡ Economist Seigniorage Stability Engine</h4>
+        <h4 style="font-size:0.9rem; color:var(--accent-strong); margin-bottom:6px;">Seigniorage Stability Protocol</h4>
         <p style="font-size:0.82rem; color:var(--text-dim); line-height:1.4;">
           <strong>Expansion Phase (LQD &gt; ₹1.00 INR):</strong> When market demand drives price above peg, the protocol inflates supply by minting new LQD and distributing it directly to Share stakers. Bondholders can redeem LQD-Bonds for 1 LQD + 5% premium.<br>
           <strong>Contraction Phase (LQD &lt; ₹1.00 INR):</strong> When market price dips below peg, the protocol contracts circulating supply by selling LQD-Bonds at a 15% discount. Burning LQD removes excess liquidity and restores the ₹1.00 peg equilibrium.
@@ -732,7 +797,8 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       <div class="section-head">
         <h2>State channels <span class="count" id="channelsCount">({{ len .Channels }})</span></h2>
         <div class="head-actions">
-          <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')">📡 BLE P2P Sync</button>
+          <button class="btn btn-sm btn-secondary" onclick="openReceiveOfflineModal()">Receive Offline</button>
+          <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')">Offline P2P Sync</button>
           <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetChannel')">Manage</button>
           <button class="btn btn-sm btn-ghost" onclick="openSheet('sheetChannel')">+ Open</button>
         </div>
@@ -885,12 +951,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 <!-- Scan -->
 <div class="overlay" id="sheetScan"><div class="sheet">
   <div class="sheet-handle"></div>
-  <div class="sheet-head"><h3>Scan a code</h3><button type="button" class="sheet-close" onclick="closeSheetAndStopScan(event)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div class="sheet-head"><h3>Scan QR Code</h3><button type="button" class="sheet-close" onclick="closeSheetAndStopScan(event)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <div class="scan-frame"><div id="scannerRegion"></div></div>
-  <div class="hint" id="scanHint">Point the camera at a LiquidLink QR code or choose a photo below.</div>
+  <div class="hint" id="scanHint" style="margin-top:10px;">Point camera at a LiquidLink QR code or snap with device camera.</div>
+  <input type="file" id="qrCameraDirect" accept="image/*" capture="environment" style="display:none;" onchange="handleQrImageUpload(this)">
   <input type="file" id="qrFileInput" accept="image/*" style="display:none;" onchange="handleQrImageUpload(this)">
-  <div class="btn-row" style="margin-top:10px;">
-    <button type="button" class="btn btn-secondary" onclick="document.getElementById('qrFileInput').click()">📷 Upload QR Photo / Image</button>
+  <div class="btn-row" style="margin-top:14px; gap:8px;">
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('qrCameraDirect').click()" style="flex:1;">Snap Camera</button>
+    <button type="button" class="btn btn-secondary" onclick="document.getElementById('qrFileInput').click()" style="flex:1;">Upload Image</button>
   </div>
 </div></div>
 
@@ -899,7 +967,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div class="sheet-handle"></div>
   <div class="sheet-head"><h3>Devnet Faucet / Mint</h3><button class="sheet-close" onclick="closeSheet('sheetMint')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <div style="font-size:0.8rem; color:#f59e0b; margin-bottom:12px; padding:8px 12px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:6px; display:flex; align-items:center; gap:8px;">
-    <span>⚡ <strong>Genesis / Devnet Faucet Tool:</strong> Minting is an administrative tool for testnet genesis allocation. Real end-users acquire tokens via transfers, trades, or fiat bridging.</span>
+    <span><strong>Genesis Faucet:</strong> Minting is an administrative tool for testnet genesis allocation. Real end-users acquire tokens via transfers, trades, or fiat bridging.</span>
   </div>
   <form onsubmit="submitMint(event)">
     <div class="form-group">
@@ -926,6 +994,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
   <div id="subOpen" class="sheet-subpanel active">
     <form onsubmit="submitOpenChannel(event)">
+      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:12px;">Opening from active wallet: <strong id="openChannelSenderAddr" style="font-family:var(--font-mono); color:var(--accent-strong);"></strong></div>
       <div class="form-group">
         <label for="chanCounterparty">Counterparty address</label>
         <input type="text" id="chanCounterparty" placeholder="Wallet address" required>
@@ -941,8 +1010,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
   <div id="subUpdate" class="sheet-subpanel">
     <form onsubmit="submitUpdateChannel(event)">
       <div class="form-group">
-        <label for="chanIdUpdate">Channel ID</label>
-        <input type="text" id="chanIdUpdate" placeholder="chan-..." required>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label for="chanIdUpdate" style="margin:0;">Select Channel to Update</label>
+          <button type="button" onclick="toggleCustomUpdateChan()" id="btnToggleCustomUpdate" style="font-size:0.75rem; color:var(--accent); background:none; border:none; cursor:pointer;">+ Custom ID</button>
+        </div>
+        <select id="chanIdUpdate" style="width:100%; padding:10px 12px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+          <option value="">-- Choose active channel --</option>
+        </select>
+        <input type="text" id="chanIdUpdateCustom" placeholder="Channel hash ID" style="display:none; margin-top:8px;">
       </div>
       <div class="form-group">
         <label for="chanUpdateAmt">Amount</label>
@@ -961,8 +1036,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
   <div id="subSettle" class="sheet-subpanel">
     <div class="form-group">
-      <label for="chanIdSettle">Channel ID</label>
-      <input type="text" id="chanIdSettle" placeholder="chan-..." required>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <label for="chanIdSettle" style="margin:0;">Select Channel to Settle</label>
+        <button type="button" onclick="toggleCustomSettleChan()" id="btnToggleCustomSettle" style="font-size:0.75rem; color:var(--accent); background:none; border:none; cursor:pointer;">+ Custom ID</button>
+      </div>
+      <select id="chanIdSettle" style="width:100%; padding:10px 12px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+        <option value="">-- Choose active channel --</option>
+      </select>
+      <input type="text" id="chanIdSettleCustom" placeholder="Channel hash ID" style="display:none; margin-top:8px;">
     </div>
     <div class="btn-row" style="flex-wrap:wrap; gap:8px;">
       <button class="btn btn-secondary" onclick="submitSettleChannel('initiate')" style="flex:1;">Initiate</button>
@@ -1024,8 +1105,8 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 
   <div style="margin-top:16px; font-size:0.85rem; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:0.5px;">Bluetooth Offline Mesh</div>
   <div style="margin-top:8px; display:flex; gap:8px;">
-    <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')" style="flex:1;">📡 Bluetooth P2P Sync</button>
-    <button class="btn btn-sm btn-ghost" onclick="sendOfflineBluetoothTx()" style="flex:1;">⚡ Relay BLE Tx</button>
+    <button class="btn btn-sm btn-secondary" onclick="openSheet('sheetBluetooth')" style="flex:1;">Offline P2P Sync</button>
+    <button class="btn btn-sm btn-ghost" onclick="sendOfflineBluetoothTx()" style="flex:1;">Relay BLE Tx</button>
   </div>
 
   <div style="margin-top:16px;" class="btn-row">
@@ -1038,39 +1119,21 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
 <div class="overlay" id="sheetBluetooth"><div class="sheet">
   <div class="sheet-handle"></div>
   <div class="sheet-head">
-    <h3>Bluetooth P2P & Offline Sync</h3>
+    <h3>Offline P2P & BLE Mesh</h3>
     <button class="sheet-close" onclick="closeSheet('sheetBluetooth')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
   </div>
 
-  <div class="sheet-tabs">
-    <button class="active" onclick="switchSubpanel('subBlePair', this, 'sheetBluetooth')">BLE Device</button>
-    <button onclick="switchSubpanel('subBlePayment', this, 'sheetBluetooth')">Make Offline Payment</button>
-    <button onclick="switchSubpanel('subBleQueue', this, 'sheetBluetooth')">Queued Tx (<span id="bleQueueCount">0</span>)</button>
-  </div>
-
-  <!-- Subpanel 1: BLE Device Pairing -->
-  <div id="subBlePair" class="sheet-subpanel active">
-    <div style="background:var(--surface-2); padding:14px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;">
-      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:4px;">BLE Pairing Status</div>
-      <div id="bleConnStatus" style="font-weight:700; font-size:0.95rem; color:var(--text); display:flex; align-items:center; gap:8px;">
-        <span style="width:8px; height:8px; border-radius:50%; background:#989ba3; display:inline-block;" id="bleDot"></span>
-        <span id="bleStatusText">Disconnected</span>
-      </div>
-      <div id="bleDeviceInfo" style="font-size:0.78rem; font-family:var(--font-mono); color:var(--accent-strong); margin-top:6px;">No device paired</div>
-    </div>
-    <div style="display:flex; gap:10px;">
-      <button class="btn btn-primary" onclick="pairWebBluetooth()" style="flex:1;">📡 Pair Web Bluetooth Device</button>
-      <button class="btn btn-secondary" onclick="disconnectWebBluetooth()" style="flex:1;">Disconnect</button>
-    </div>
-    <p class="hint" style="margin-top:12px; font-size:0.78rem; color:var(--text-faint);">
-      Connects directly to nearby laptops/phones running LiquidLink BLE GATT service. Payments made while disconnected from the host will be queued locally with Ed25519 signatures.
-    </p>
+  <div class="sheet-tabs" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:4px;">
+    <button class="active" onclick="switchSubpanel('subBlePayment', this, 'sheetBluetooth')" style="font-size:0.74rem; padding:8px 4px;">Send Offline</button>
+    <button onclick="switchSubpanel('subBleReceive', this, 'sheetBluetooth')" style="font-size:0.74rem; padding:8px 4px;">Receive QR</button>
+    <button onclick="switchSubpanel('subBlePair', this, 'sheetBluetooth')" style="font-size:0.74rem; padding:8px 4px;">BLE Device</button>
+    <button onclick="switchSubpanel('subBleQueue', this, 'sheetBluetooth')" style="font-size:0.74rem; padding:8px 4px;">Outbox (<span id="bleQueueCount">0</span>)</button>
   </div>
 
   <!-- Subpanel 2: Make Offline Payment -->
-  <div id="subBlePayment" class="sheet-subpanel">
+  <div id="subBlePayment" class="sheet-subpanel active">
     <form onsubmit="submitOfflinePaymentForm(event)">
       <div class="form-group">
         <label>Payment Medium</label>
@@ -1081,8 +1144,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
       </div>
 
       <div class="form-group" id="grpBleChannel">
-        <label for="bleChannelID">Channel ID</label>
-        <input type="text" id="bleChannelID" placeholder="Channel hash ID">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label for="bleChannelID" style="margin:0;">Select State Channel</label>
+          <button type="button" onclick="toggleCustomChannelInput()" id="btnToggleCustomChan" style="font-size:0.75rem; color:var(--accent); background:none; border:none; cursor:pointer;">+ Custom ID</button>
+        </div>
+        <select id="bleChannelID" style="width:100%; padding:10px 12px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px;">
+          <option value="">-- Choose active channel --</option>
+        </select>
+        <input type="text" id="bleChannelCustomID" placeholder="Paste custom channel hash" style="display:none; margin-top:8px;">
       </div>
 
       <div class="form-group" id="grpBleReceiver" style="display:none;">
@@ -1095,8 +1164,63 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         <input type="number" id="bleAmount" min="1" placeholder="10" required>
       </div>
 
-      <button type="submit" class="btn btn-primary">Sign & Queue Offline Payment ⚡</button>
+      <button type="submit" class="btn btn-primary" style="width:100%;">Sign & Show Payment QR</button>
     </form>
+
+    <!-- Signed Offline QR Display Card -->
+    <div id="offlinePaymentQrCard" style="display:none; background:var(--surface-2); padding:16px; border-radius:12px; border:1px solid var(--border); margin-top:14px; text-align:center;">
+      <div style="font-size:0.85rem; font-weight:600; color:var(--accent); margin-bottom:4px;">Signed Offline Payment</div>
+      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:10px;" id="offlineQrDetails">Channel Payment (Seq 3)</div>
+      <div id="offlinePaymentQrCanvas" style="display:inline-block; padding:10px; background:white; border-radius:8px; margin-bottom:10px;"></div>
+      <div style="font-size:0.74rem; color:var(--text-faint); margin-bottom:12px;">Present this QR code to the receiver's phone to transfer value offline.</div>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="dismissOfflinePaymentQr()" style="width:100%;">Done</button>
+    </div>
+  </div>
+
+  <!-- Subpanel 4: Receive Offline Payment via Camera -->
+  <div id="subBleReceive" class="sheet-subpanel">
+    <div style="background:var(--surface-2); padding:16px; border-radius:12px; border:1px solid var(--border); text-align:center;">
+      <div style="font-size:0.95rem; font-weight:600; color:var(--text); margin-bottom:4px;">Scan Offline Payment</div>
+      <p class="hint" id="offlineScanHint" style="font-size:0.78rem; color:var(--text-dim); margin-bottom:12px;">Scan the payer's offline payment QR code to verify Ed25519 signature and credit channel balance with zero internet.</p>
+      <div class="scan-frame" style="width:100%; max-width:280px; margin:0 auto 14px;"><div id="offlineScannerRegion"></div></div>
+      <input type="file" id="offlineCameraDirect" accept="image/*" capture="environment" style="display:none;" onchange="handleOfflineQrImageUpload(this)">
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn btn-primary" onclick="startOfflinePaymentScan()" id="btnStartOfflineScan" style="flex:1;">Live Camera</button>
+        <button type="button" class="btn btn-secondary" onclick="stopOfflinePaymentScan()" id="btnStopOfflineScan" style="flex:1; display:none;">Stop Camera</button>
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('offlineCameraDirect').click()" id="btnDirectOfflineSnap" style="flex:1;">Snap Camera</button>
+      </div>
+      <div style="margin-top:10px;">
+        <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('offlineQrFileInput').click()" style="width:100%;">Upload QR Image File</button>
+        <input type="file" id="offlineQrFileInput" accept="image/*" style="display:none;" onchange="handleOfflineQrImageUpload(this)">
+      </div>
+
+      <!-- Offline Payment Receipt Acknowledgement Card -->
+      <div id="offlineAckQrCard" style="display:none; margin-top:16px; padding:16px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.3); border-radius:12px; text-align:center;">
+        <div style="font-size:0.95rem; font-weight:700; color:#22c55e; margin-bottom:4px;">Receipt Acknowledged (Offline)</div>
+        <p id="offlineAckQrDetails" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px;">Payment verified offline. Present this receipt to the sender to confirm their transfer.</p>
+        <div id="offlineAckQrCanvas" style="display:flex; justify-content:center; padding:10px; background:#fff; border-radius:8px; width:fit-content; margin:0 auto 12px;"></div>
+        <button type="button" class="btn btn-sm btn-ghost" onclick="dismissOfflineAckQr()">Dismiss Receipt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subpanel 1: BLE Device Pairing -->
+  <div id="subBlePair" class="sheet-subpanel">
+    <div style="background:var(--surface-2); padding:14px; border-radius:12px; border:1px solid var(--border); margin-bottom:14px;">
+      <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:4px;">BLE Pairing Status</div>
+      <div id="bleConnStatus" style="font-weight:700; font-size:0.95rem; color:var(--text); display:flex; align-items:center; gap:8px;">
+        <span style="width:8px; height:8px; border-radius:50%; background:#989ba3; display:inline-block;" id="bleDot"></span>
+        <span id="bleStatusText">Disconnected</span>
+      </div>
+      <div id="bleDeviceInfo" style="font-size:0.78rem; font-family:var(--font-mono); color:var(--accent-strong); margin-top:6px;">No device paired</div>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-primary" onclick="pairWebBluetooth()" style="flex:1;">Pair BLE Device</button>
+      <button class="btn btn-secondary" onclick="disconnectWebBluetooth()" style="flex:1;">Disconnect</button>
+    </div>
+    <p class="hint" style="margin-top:12px; font-size:0.78rem; color:var(--text-faint);">
+      Connects directly to nearby devices running LiquidLink BLE GATT service. Payments made while disconnected will buffer locally with Ed25519 signatures.
+    </p>
   </div>
 
   <!-- Subpanel 3: Queued Offline Payments & Host Push -->
@@ -1107,7 +1231,7 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         <input type="text" id="bleHostUrl" placeholder="http://192.168.1.X:8080" style="font-family:var(--font-mono); font-size:0.85rem;">
         <button class="btn btn-sm btn-secondary" onclick="resetHostUrl()" style="white-space:nowrap;">This Node</button>
       </div>
-      <p class="hint" style="margin-top:4px;">Set IP of Laptop A (host node) when Laptop B connects back to network.</p>
+      <p class="hint" style="margin-top:4px;">Endpoint of the validator node to commit offline state transitions.</p>
     </div>
 
     <div id="bleQueueList" style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; margin-bottom:14px;">
@@ -1115,20 +1239,196 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
     </div>
 
     <div style="display:flex; gap:10px;">
-      <button class="btn btn-primary" onclick="pushOfflineQueueToHost()" id="btnPushHost" style="flex:2;">🚀 Push & Validate with Host</button>
+      <button class="btn btn-primary" onclick="pushOfflineQueueToHost()" id="btnPushHost" style="flex:2;">Push to Validator</button>
       <button class="btn btn-secondary" onclick="clearOfflineQueueUI()" style="flex:1;">Clear</button>
     </div>
   </div>
 </div></div>
 
 <script>
+/* ---------- PWA Service Worker Registration ---------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      console.log('[LiquidLink PWA] Service Worker registered:', reg.scope);
+    }).catch((err) => {
+      console.warn('[LiquidLink PWA] Service Worker registration failed:', err);
+    });
+  });
+}
+
+/* ---------- In-Browser Cryptographic Utilities (TweetNaCl & WebCrypto) ---------- */
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return bytes;
+}
+
+// Synchronous SHA-256 digest computation (RFC 6234 compliant)
+function sha256Sync(data) {
+  const K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+
+  let H0 = 0x6a09e667, H1 = 0xbb67ae85, H2 = 0x3c6ef372, H3 = 0xa54ff53a;
+  let H4 = 0x510e527f, H5 = 0x9b05688c, H6 = 0x1f83d9ab, H7 = 0x5be0cd19;
+
+  const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const l = input.length;
+  const bitLen = l * 8;
+  const newLen = ((l + 8) >> 6 << 6) + 64;
+  const buf = new Uint8Array(newLen);
+  buf.set(input);
+  buf[l] = 0x80;
+
+  const view = new DataView(buf.buffer);
+  view.setUint32(newLen - 4, bitLen, false);
+
+  const W = new Int32Array(64);
+  for (let i = 0; i < newLen; i += 64) {
+    for (let t = 0; t < 16; t++) {
+      W[t] = view.getInt32(i + t * 4, false);
+    }
+    for (let t = 16; t < 64; t++) {
+      const s0 = ((W[t-15] >>> 7) | (W[t-15] << 25)) ^ ((W[t-15] >>> 18) | (W[t-15] << 14)) ^ (W[t-15] >>> 3);
+      const s1 = ((W[t-2] >>> 17) | (W[t-2] << 15)) ^ ((W[t-2] >>> 19) | (W[t-2] << 13)) ^ (W[t-2] >>> 10);
+      W[t] = (W[t-16] + s0 + W[t-7] + s1) | 0;
+    }
+
+    let a = H0, b = H1, c = H2, d = H3, e = H4, f = H5, g = H6, h = H7;
+    for (let t = 0; t < 64; t++) {
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const ch = (e & f) ^ ((~e) & g);
+      const temp1 = (h + S1 + ch + K[t] + W[t]) | 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) | 0;
+
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) | 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) | 0;
+    }
+
+    H0 = (H0 + a) | 0;
+    H1 = (H1 + b) | 0;
+    H2 = (H2 + c) | 0;
+    H3 = (H3 + d) | 0;
+    H4 = (H4 + e) | 0;
+    H5 = (H5 + f) | 0;
+    H6 = (H6 + g) | 0;
+    H7 = (H7 + h) | 0;
+  }
+
+  const out = new Uint8Array(32);
+  const outView = new DataView(out.buffer);
+  outView.setUint32(0, H0, false);
+  outView.setUint32(4, H1, false);
+  outView.setUint32(8, H2, false);
+  outView.setUint32(12, H3, false);
+  outView.setUint32(16, H4, false);
+  outView.setUint32(20, H5, false);
+  outView.setUint32(24, H6, false);
+  outView.setUint32(28, H7, false);
+  return out;
+}
+
+async function deriveAddressFromPub(pubBytes) {
+  const hashBytes = sha256Sync(pubBytes);
+  return '0x' + bytesToHex(hashBytes.slice(0, 20));
+}
+
+function getWalletKeyStorageKey(address, type) {
+  const norm = (address || '').toLowerCase().trim();
+  return 'liquidlink_wallet_key_' + norm + '_' + type;
+}
+
+function saveWalletKeys(address, keys) {
+  if (!address || !keys) return;
+  const norm = address.toLowerCase().trim();
+  if (keys.privateKey) localStorage.setItem(getWalletKeyStorageKey(norm, 'privkey'), keys.privateKey);
+  if (keys.publicKey) localStorage.setItem(getWalletKeyStorageKey(norm, 'pubkey'), keys.publicKey);
+}
+
+function getWalletKeys(address) {
+  if (!address) return null;
+  const norm = address.toLowerCase().trim();
+  const priv = localStorage.getItem(getWalletKeyStorageKey(norm, 'privkey'));
+  const pub = localStorage.getItem(getWalletKeyStorageKey(norm, 'pubkey'));
+  if (priv && pub) return { privateKey: priv, publicKey: pub };
+  return null;
+}
+
+async function getOrCreateClientKeypair(targetAddr) {
+  const addrToUse = (targetAddr || localStorage.getItem(getStorageKey('active_wallet')) || localStorage.getItem('liquidlink_active_wallet') || '').toLowerCase().trim();
+  if (addrToUse) {
+    const scoped = getWalletKeys(addrToUse);
+    if (scoped && scoped.privateKey && scoped.publicKey) {
+      const pubBytes = hexToBytes(scoped.publicKey);
+      const derived = await deriveAddressFromPub(pubBytes);
+      return {
+        secretKey: hexToBytes(scoped.privateKey),
+        publicKey: pubBytes,
+        address: derived
+      };
+    }
+  }
+
+  let privHex = localStorage.getItem('liquidlink_client_privkey');
+  let pubHex = localStorage.getItem('liquidlink_client_pubkey');
+  if (privHex && pubHex) {
+    const pubBytes = hexToBytes(pubHex);
+    const addr = await deriveAddressFromPub(pubBytes);
+    return {
+      secretKey: hexToBytes(privHex),
+      publicKey: pubBytes,
+      address: addr
+    };
+  }
+  if (window.nacl) {
+    const kp = nacl.sign.keyPair();
+    privHex = bytesToHex(kp.secretKey);
+    pubHex = bytesToHex(kp.publicKey);
+    localStorage.setItem('liquidlink_client_privkey', privHex);
+    localStorage.setItem('liquidlink_client_pubkey', pubHex);
+    const addr = await deriveAddressFromPub(kp.publicKey);
+    localStorage.setItem('liquidlink_client_address', addr);
+    if (addrToUse) {
+      saveWalletKeys(addrToUse, { privateKey: privHex, publicKey: pubHex });
+    }
+    return { secretKey: kp.secretKey, publicKey: kp.publicKey, address: addr };
+  }
+  return null;
+}
+
 /* ---------- Toast ---------- */
 let toastTimer;
 function showAlert(msg, isError) {
   const box = document.getElementById('alertBox');
   box.className = (isError ? 'alert-danger' : 'alert-success');
   box.textContent = msg;
-  requestAnimationFrame(() => box.classList.add('show'));
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => box.classList.add('show'));
+  } else {
+    box.classList.add('show');
+  }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => box.classList.remove('show'), 4200);
 }
@@ -1137,12 +1437,23 @@ function showAlert(msg, isError) {
 function openSheet(id) {
   const el = document.getElementById(id);
   if (el) {
+    if (id === 'sheetBridge') {
+      const rec = document.getElementById('bridgeReceiver');
+      if (rec && !rec.value) rec.value = getActiveWallet();
+    }
+    if (id === 'sheetChannel') {
+      const senderEl = document.getElementById('openChannelSenderAddr');
+      if (senderEl) senderEl.textContent = getActiveWallet();
+    }
     el.classList.add('open');
     document.body.style.overflow = 'hidden';
   }
 }
 
 function closeSheet(id) {
+  if (id === 'sheetBluetooth') {
+    stopOfflinePaymentScan();
+  }
   const el = document.getElementById(id);
   if (el) {
     el.classList.remove('open');
@@ -1175,6 +1486,13 @@ function switchSubpanel(id, btn, scope) {
   root.querySelectorAll('.sheet-subpanel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById(id).classList.add('active');
+  if (scope === 'sheetBluetooth') {
+    if (id === 'subBleReceive') {
+      startOfflinePaymentScan();
+    } else {
+      stopOfflinePaymentScan();
+    }
+  }
 }
 
 function openVerifySheet(utr) {
@@ -1278,12 +1596,6 @@ async function openScanner(fillFieldId, thenOpenSheet) {
   openSheet('sheetScan');
   
   const hint = document.getElementById('scanHint');
-  const isSecure = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  
-  if (!window.Html5Qrcode) {
-    hint.innerHTML = '⚠️ Scanner engine loading. Tap <b>"📷 Upload QR Photo / Image"</b> below to pick a photo!';
-    return;
-  }
 
   // Safely stop & clear any previous scanner instance
   if (html5QrScanner) {
@@ -1293,24 +1605,47 @@ async function openScanner(fillFieldId, thenOpenSheet) {
     try { prev.clear(); } catch(e) {}
   }
 
-  // Check MediaDevices API
+  // Explicitly prompt for camera permission immediately on user interaction
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      stream.getTracks().forEach(t => t.stop());
+    } catch (pErr) {
+      console.warn('[Camera] Permission request:', pErr);
+    }
+  }
+
+  if (!window.Html5Qrcode) {
+    if (hint) hint.innerHTML = 'Camera engine loading... Tap <b>"Snap Camera"</b> below!';
+    return;
+  }
+
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    if (!isSecure) {
-      hint.innerHTML = '💡 <b>HTTP Context Notice:</b> Mobile browsers disable live webcams over plain HTTP (<code>http://10.89.63.191</code>).<br><br><b>Solutions:</b><br>1. Tap <b>"📷 Upload QR Photo / Image"</b> below to pick/snap a photo.<br>2. Or enable HTTP camera in Chrome flags: <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>.';
-    } else {
-      hint.innerHTML = '⚠️ Live camera API not supported by browser. Tap <b>"📷 Upload QR Photo / Image"</b> below!';
+    if (hint) {
+      hint.innerHTML = '<b>Plain HTTP Note:</b> Mobile browsers restrict live webcam streaming over insecure HTTP. Tap <b>"Snap Camera"</b> below to capture with native camera!';
     }
     return;
   }
 
-  hint.innerHTML = '⏳ Starting camera stream... Please tap <b>Allow</b> if prompted!';
+  if (hint) hint.innerHTML = 'Starting camera stream... Please tap <b>Allow</b> if prompted.';
 
-  html5QrScanner = new Html5Qrcode('scannerRegion');
+  html5QrScanner = new Html5Qrcode('scannerRegion', {
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
+
   const qrConfig = {
-    fps: 15,
-    qrbox: { width: 220, height: 220 },
-    aspectRatio: 1.0,
-    videoConstraints: { facingMode: { ideal: "environment" } }
+    fps: 10,
+    qrbox: function(w, h) {
+      const minEdge = Math.min(w, h);
+      const edge = Math.max(160, Math.floor(minEdge * 0.85));
+      return { width: edge, height: edge };
+    },
+    videoConstraints: {
+      facingMode: { ideal: "environment" },
+      width: { min: 640, ideal: 1280 },
+      height: { min: 480, ideal: 720 }
+    }
   };
 
   try {
@@ -1320,51 +1655,72 @@ async function openScanner(fillFieldId, thenOpenSheet) {
       onQrScanSuccess,
       () => {}
     );
-    hint.innerHTML = 'Point camera at a LiquidLink QR code to scan.';
+    if (hint) hint.innerHTML = 'Point camera at a LiquidLink QR code to scan.';
   } catch (err) {
-    console.warn('Html5Qrcode start facingMode error, trying camera list:', err);
+    console.warn('Html5Qrcode start error, trying camera list:', err);
     try {
       const cameras = await Html5Qrcode.getCameras();
       if (cameras && cameras.length > 0) {
         const backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear')) || cameras[0];
         await html5QrScanner.start(backCamera.id, qrConfig, onQrScanSuccess, () => {});
-        hint.innerHTML = 'Point camera at a LiquidLink QR code to scan.';
+        if (hint) hint.innerHTML = 'Point camera at a LiquidLink QR code to scan.';
         return;
       }
     } catch (camErr) {}
     
-    if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
-      hint.innerHTML = '⚠️ <b>Camera Permission Denied:</b> Please grant camera access in browser site settings.<br><br>Or tap <b>"📷 Upload QR Photo / Image"</b> below!';
-    } else if (!isSecure) {
-      hint.innerHTML = '💡 <b>HTTP Context:</b> Live camera stream blocked on plain HTTP.<br><b>Tap "Upload QR Photo" below</b> to select/snap a QR picture!';
-    } else {
-      hint.innerHTML = '💡 <b>Camera stream error:</b> Camera unavailable.<br><b>Tap "Upload QR Photo" below</b> to scan from gallery!';
+    if (hint) {
+      hint.innerHTML = 'Live camera stream paused. Tap <b>"Snap Camera"</b> below to capture directly!';
     }
   }
 }
 
 function onQrScanSuccess(decodedText) {
+  // Check if scanned QR is an offline payment payload or ACK receipt
+  if (decodedText) {
+    try {
+      let raw = typeof decodedText === 'string' ? decodedText.trim() : '';
+      if (raw.startsWith('%7B')) raw = decodeURIComponent(raw);
+      if ((raw.startsWith('{') && raw.endsWith('}')) || typeof decodedText === 'object') {
+        const parsed = typeof decodedText === 'object' ? decodedText : JSON.parse(raw);
+        if (parsed && (parsed.type === 'offline_payment_ack' || (parsed.signature && (parsed.channel_id || parsed.type === 'pcn_offline_payment' || parsed.type === 'direct_tx_offline' || parsed.type === 'direct_transfer' || parsed.receiver)))) {
+          closeSheetAndStopScan();
+          onOfflineQrScanSuccess(parsed);
+          return;
+        }
+      }
+    } catch (_) {}
+  }
   if (currentTargetField) {
     const field = document.getElementById(currentTargetField);
     if (field) field.value = decodedText;
   }
   closeSheetAndStopScan();
   if (currentNextSheet) openSheet(currentNextSheet);
-  showAlert('Address captured: ' + decodedText.substring(0, 16) + '...');
+  showAlert('Address captured: ' + String(decodedText).substring(0, 16) + '...');
 }
 
-function handleQrImageUpload(input) {
+async function handleQrImageUpload(input) {
   if (!input.files || input.files.length === 0) return;
   const file = input.files[0];
   const hint = document.getElementById('scanHint');
   hint.textContent = 'Decoding QR image...';
+
+  // Stop live scanner if currently running
+  if (html5QrScanner) {
+    try { await html5QrScanner.stop(); } catch (_) {}
+    try { html5QrScanner.clear(); } catch (_) {}
+    html5QrScanner = null;
+  }
 
   if (!window.Html5Qrcode) {
     showAlert('QR scanner engine not ready', true);
     return;
   }
 
-  const fileScanner = new Html5Qrcode('scannerRegion');
+  const fileScanner = new Html5Qrcode('scannerRegion', {
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
   fileScanner.scanFile(file, true)
     .then(decodedText => {
       fileScanner.clear();
@@ -1372,7 +1728,7 @@ function handleQrImageUpload(input) {
     })
     .catch(err => {
       fileScanner.clear();
-      hint.innerHTML = '⚠️ Could not detect a valid QR code in that photo.<br>Please select a clearer image or paste address directly.';
+      hint.innerHTML = ' Could not detect a valid QR code in that photo.<br>Please select a clearer image or paste address directly.';
       showAlert('No QR code detected in photo', true);
     });
 }
@@ -1438,13 +1794,37 @@ function getStorageKey(key) {
   return 'liquidlink_' + key + '_' + port;
 }
 
-let activeBleDevice = null;
-let activeBleServer = null;
-let activeBleCharacteristic = null;
+function getWalletHoldingsKey(addr) {
+  const target = addr || getActiveWallet();
+  return getStorageKey('holdings_' + (target || '').toLowerCase());
+}
 
-function getOfflineQueue() {
+function getCachedWalletHoldings(addr) {
   try {
-    const raw = localStorage.getItem(getStorageKey('offline_queue'));
+    const raw = localStorage.getItem(getWalletHoldingsKey(addr));
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+
+function saveWalletHoldings(addr, holdings) {
+  const target = addr || getActiveWallet();
+  if (!target) return;
+  try {
+    const prev = getCachedWalletHoldings(target) || {};
+    const merged = Object.assign({}, prev, holdings);
+    localStorage.setItem(getWalletHoldingsKey(target), JSON.stringify(merged));
+  } catch (e) {}
+}
+
+function getChannelsStorageKey(addr) {
+  const target = addr || getActiveWallet();
+  return getStorageKey('pcn_channels_' + (target || '').toLowerCase());
+}
+
+function getCachedWalletChannels(addr) {
+  try {
+    const raw = localStorage.getItem(getChannelsStorageKey(addr));
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
@@ -1453,9 +1833,72 @@ function getOfflineQueue() {
   return [];
 }
 
+function saveWalletChannels(addr, channels) {
+  const target = addr || getActiveWallet();
+  try {
+    localStorage.setItem(getChannelsStorageKey(target), JSON.stringify(channels || []));
+  } catch (e) {}
+}
+
+function getBridgeStorageKey(addr) {
+  const target = addr || getActiveWallet();
+  return getStorageKey('bridge_mappings_' + (target || '').toLowerCase());
+}
+
+function getCachedWalletBridgeMappings(addr) {
+  try {
+    const raw = localStorage.getItem(getBridgeStorageKey(addr));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveWalletBridgeMappings(addr, mappings) {
+  const target = addr || getActiveWallet();
+  try {
+    localStorage.setItem(getBridgeStorageKey(target), JSON.stringify(mappings || []));
+  } catch (e) {}
+}
+
+function getOfflineQueueStorageKey(addr) {
+  const target = addr || getActiveWallet();
+  return getStorageKey('offline_queue_' + (target || '').toLowerCase());
+}
+
+function getCachedWalletOfflineQueue(addr) {
+  try {
+    const raw = localStorage.getItem(getOfflineQueueStorageKey(addr));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveWalletOfflineQueue(addr, queue) {
+  const target = addr || getActiveWallet();
+  try {
+    localStorage.setItem(getOfflineQueueStorageKey(target), JSON.stringify(queue || []));
+  } catch (e) {}
+  if (target && target.toLowerCase() === (getActiveWallet() || '').toLowerCase()) {
+    renderOfflineQueue();
+  }
+}
+
+let activeBleDevice = null;
+let activeBleServer = null;
+let activeBleCharacteristic = null;
+
+function getOfflineQueue() {
+  return getCachedWalletOfflineQueue(getActiveWallet());
+}
+
 function saveOfflineQueue(queue) {
-  localStorage.setItem(getStorageKey('offline_queue'), JSON.stringify(queue));
-  renderOfflineQueue();
+  saveWalletOfflineQueue(getActiveWallet(), queue);
 }
 
 function renderOfflineQueue() {
@@ -1476,10 +1919,21 @@ function renderOfflineQueue() {
     const isPcn = item.type === 'pcn_offline_payment' || !!item.channel_id;
     const targetLabel = isPcn ? 'Channel: ' + (item.channel_id || '').slice(0, 12) + '...' : 'To: ' + (item.receiver || '').slice(0, 12) + '...';
     const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '';
+    let badgeClass = 'badge badge-pending';
+    let badgeStyle = 'font-size:0.6rem;';
+    let statusText = item.status || 'Pending Sync';
+    if (statusText === 'Confirmed by Receiver (Offline)' || item.confirmed_offline) {
+      badgeClass = 'badge badge-settled';
+      badgeStyle = 'font-size:0.6rem; background:rgba(34,197,94,0.18); color:#22c55e; border-color:rgba(34,197,94,0.3);';
+      statusText = 'Confirmed (Offline)';
+    } else if (statusText === 'Synced to Host') {
+      badgeClass = 'badge badge-settled';
+      statusText = 'Synced';
+    }
     html += '<div class="list-row" style="padding:10px 12px; background:var(--surface-2); border-radius:8px; margin-bottom:4px;">' +
       '<div class="row-main">' +
-        '<div class="row-title" style="font-size:0.8rem;">' + (isPcn ? '⚡ PCN Off-Chain' : '💸 Direct Tx') +
-          ' <span class="badge badge-pending" style="font-size:0.6rem;">' + (item.status || 'Pending Sync') + '</span></div>' +
+        '<div class="row-title" style="font-size:0.8rem;">' + (isPcn ? 'PCN Off-Chain' : 'Direct Transfer') +
+          ' <span class="' + badgeClass + '" style="' + badgeStyle + '">' + statusText + '</span></div>' +
         '<div class="row-sub" style="font-size:0.74rem;">' + targetLabel + (item.sequence ? ' (Seq ' + item.sequence + ')' : '') + ' • ' + timeStr + '</div>' +
       '</div>' +
       '<div class="row-side">' +
@@ -1607,10 +2061,7 @@ async function submitOfflinePaymentForm(e) {
   let item = null;
   if (payType === 'pcn') {
     let chanId = (document.getElementById('bleChannelID').value || '').trim();
-    let channels = [];
-    try {
-      channels = JSON.parse(localStorage.getItem(getStorageKey('pcn_channels'))) || [];
-    } catch (e) {}
+    let channels = getCachedWalletChannels(user);
 
     let ch = channels.find(c => c.id === chanId);
     if (!ch && channels.length > 0) {
@@ -1623,11 +2074,11 @@ async function submitOfflinePaymentForm(e) {
     }
 
     const currentSeq = ch ? (ch.sequence || 1) : 1;
-    const currentBalA = ch ? (ch.share.balance_party_a || 1000) : 1000;
-    const currentBalB = ch ? (ch.share.balance_party_b || 0) : 0;
+    const currentBalA = ch ? ((ch.share && ch.share.balance_party_a !== undefined) ? ch.share.balance_party_a : ((ch.share && ch.share.BalancePartyA !== undefined) ? ch.share.BalancePartyA : (ch.balance_a !== undefined ? ch.balance_a : 0))) : 0;
+    const currentBalB = ch ? ((ch.share && ch.share.balance_party_b !== undefined) ? ch.share.balance_party_b : ((ch.share && ch.share.BalancePartyB !== undefined) ? ch.share.BalancePartyB : (ch.balance_b !== undefined ? ch.balance_b : 0))) : 0;
 
-    const partyA = ch ? ch.share.party_a : user;
-    const partyB = ch ? ch.share.party_b : '0xcounterparty';
+    const partyA = ch ? ((ch.share && (ch.share.party_a || ch.share.PartyA)) || ch.party_a || user) : user;
+    const partyB = ch ? ((ch.share && (ch.share.party_b || ch.share.PartyB)) || ch.party_b || '') : '';
     const isPartyB = partyB && user && partyB.toLowerCase() === user.toLowerCase();
 
     let newBalA, newBalB;
@@ -1679,40 +2130,63 @@ async function submitOfflinePaymentForm(e) {
     };
   }
 
-  // Request cryptographic Ed25519 signature from node wallet
-  try {
-    const signRes = await postData('/api/v1/wallet/sign-offline', {
-      type: payType,
-      channel_id: item.channel_id,
-      sequence: item.sequence,
-      balance_a: item.balance_a,
-      balance_b: item.balance_b,
-      receiver: item.receiver,
-      amount: item.amount,
-      nonce: item.nonce
-    });
-    if (signRes && signRes.signature && signRes.public_key) {
-      item.signature = signRes.signature;
-      item.public_key = signRes.public_key;
-      if (signRes.sender && payType === 'direct') {
-        item.sender = signRes.sender;
+  // 1. Attempt client-side offline signature via TweetNaCl if available
+  if (window.nacl) {
+    try {
+      const clientKp = await getOrCreateClientKeypair(user);
+      if (clientKp) {
+        let hashBytes;
+        if (payType === 'pcn') {
+          const msg = item.channel_id + '|' + item.sequence + '|' + item.balance_a + '|' + item.balance_b;
+          hashBytes = sha256Sync(msg);
+        } else {
+          item.sender = clientKp.address;
+          const msg = item.sender + '|' + item.receiver + '|' + item.amount + '|' + item.nonce;
+          hashBytes = sha256Sync(msg);
+        }
+        const sig = nacl.sign.detached(hashBytes, clientKp.secretKey);
+        item.signature = bytesToHex(sig);
+        item.public_key = bytesToHex(clientKp.publicKey);
       }
+    } catch (localSignErr) {
+      console.warn('Local client signing error:', localSignErr);
     }
-  } catch (signErr) {
-    console.warn('Offline signature generation error:', signErr);
+  }
+
+  // 2. Fallback to node wallet signing if online and not yet signed
+  if (!item.signature || !item.public_key) {
+    try {
+      const signRes = await postData('/api/v1/wallet/sign-offline', {
+        type: payType,
+        channel_id: item.channel_id,
+        sequence: item.sequence,
+        balance_a: item.balance_a,
+        balance_b: item.balance_b,
+        receiver: item.receiver,
+        amount: item.amount,
+        nonce: item.nonce
+      });
+      if (signRes && signRes.signature && signRes.public_key) {
+        item.signature = signRes.signature;
+        item.public_key = signRes.public_key;
+        if (signRes.sender && payType === 'direct') {
+          item.sender = signRes.sender;
+        }
+      }
+    } catch (signErr) {
+      console.warn('Node wallet signing error:', signErr);
+    }
   }
 
   if (!item.signature || !item.public_key) {
-    showAlert('Failed to cryptographically sign offline transaction with node wallet', true);
+    showAlert('Failed to cryptographically sign payment payload.', true);
     return;
   }
 
-  // Queue item in localStorage
-  const queue = getOfflineQueue();
-  queue.push(item);
-  saveOfflineQueue(queue);
+  // 3. Render Offline Payment QR code for air-gapped P2P relay
+  renderOfflinePaymentQr(item);
 
-  // If BLE characteristic is available, write directly over GATT
+  // 4. If BLE characteristic is available, write directly over GATT
   const payloadStr = JSON.stringify(item);
   if (activeBleCharacteristic) {
     try {
@@ -1725,11 +2199,50 @@ async function submitOfflinePaymentForm(e) {
     } catch (err) {}
   }
 
-  // Also broadcast over local node BLE transport driver
-  await postData('/api/v1/transport/broadcast-offline', { payload: payloadStr }).catch(() => {});
+  // 5. Attempt immediate synchronization if host node is currently reachable
+  let alreadySynced = false;
+  try {
+    const bRes = await postData('/api/v1/transport/broadcast-offline', { payload: payloadStr });
+    if (bRes && (bRes.status === 'offline_pcn_synced' || bRes.status === 'offline_tx_validated' || bRes.status === 'relayed_over_bluetooth')) {
+      alreadySynced = true;
+    }
+  } catch (syncErr) {
+    // Node is currently unreachable (true offline scenario)
+  }
 
-  showAlert('Offline payment signed & queued! (' + amount + ' LQD) ⚡ Ready to push to Host.');
-  switchSubpanel('subBleQueue', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[2], 'sheetBluetooth');
+  if (alreadySynced) {
+    showAlert('Payment signed and validated by Host node (' + amount + ' LQD)');
+    refreshDashboardData();
+  } else {
+    // Buffer locally in outbox queue when offline
+    const queue = getOfflineQueue();
+    queue.push(item);
+    saveOfflineQueue(queue);
+
+    if (payType === 'pcn') {
+      const channels = getCachedWalletChannels(user);
+      const chIndex = channels.findIndex(c => c.id === item.channel_id);
+      if (chIndex >= 0) {
+        channels[chIndex].sequence = item.sequence;
+        if (channels[chIndex].share) {
+          channels[chIndex].share.balance_party_a = item.balance_a;
+          channels[chIndex].share.balance_party_b = item.balance_b;
+        }
+        saveWalletChannels(user, channels);
+        renderChannelsList(channels);
+      }
+    } else {
+      const currentHoldings = getCachedWalletHoldings(user) || { balance: 1000, inr_balance: 1000 };
+      if (currentHoldings.balance !== undefined) {
+        currentHoldings.balance = Math.max(0, currentHoldings.balance - amount);
+        saveWalletHoldings(user, currentHoldings);
+        const heroBalEl = document.getElementById('heroTotalBalance');
+        if (heroBalEl) heroBalEl.innerHTML = currentHoldings.balance + '<small>LQD</small>';
+      }
+    }
+
+    showAlert('Offline mode: Payment signed and queued locally (' + amount + ' LQD). Present QR code to receiver.');
+  }
 }
 
 async function pushOfflineQueueToHost() {
@@ -1741,6 +2254,9 @@ async function pushOfflineQueueToHost() {
 
   const hostUrlInput = document.getElementById('bleHostUrl');
   let hostUrl = (hostUrlInput && hostUrlInput.value.trim()) || window.location.origin;
+  if (!/^https?:\/\//i.test(hostUrl)) {
+    hostUrl = 'http://' + hostUrl;
+  }
   hostUrl = hostUrl.replace(/\/+$/, '');
 
   const btn = document.getElementById('btnPushHost');
@@ -1750,6 +2266,7 @@ async function pushOfflineQueueToHost() {
 
   let successCount = 0;
   let remaining = [];
+  let lastError = '';
 
   for (const item of queue) {
     try {
@@ -1779,6 +2296,7 @@ async function pushOfflineQueueToHost() {
         remaining.push(item);
       }
     } catch (err) {
+      lastError = err.message || (typeof err === 'string' ? err : 'Connection error');
       remaining.push(item);
     }
   }
@@ -1788,11 +2306,61 @@ async function pushOfflineQueueToHost() {
   refreshDashboardData();
 
   if (successCount > 0) {
-    showAlert('Successfully pushed & validated ' + successCount + ' payments on Host node! 🚀');
+    showAlert('Successfully pushed & validated ' + successCount + ' payments on Host node! ');
   } else {
-    showAlert('Failed to connect or validate with Host. Ensure Host is reachable at ' + hostUrl, true);
+    showAlert('Validation failed with Host (' + hostUrl + '): ' + (lastError || 'Ensure Host is reachable'), true);
   }
 }
+
+async function autoSyncOfflineQueue() {
+  const queue = getOfflineQueue();
+  if (!queue || queue.length === 0) return;
+  const unsynced = queue.filter(item => item.status !== 'Synced to Host');
+  if (unsynced.length === 0) return;
+
+  const hostUrlInput = document.getElementById('bleHostUrl');
+  let hostUrl = (hostUrlInput && hostUrlInput.value.trim()) || window.location.origin;
+  if (!/^https?:\/\//i.test(hostUrl)) {
+    hostUrl = 'http://' + hostUrl;
+  }
+  hostUrl = hostUrl.replace(/\/+$/, '');
+
+  let updated = false;
+  for (const item of unsynced) {
+    try {
+      let endpoint = hostUrl + '/api/v1/transport/broadcast-offline';
+      let body = { payload: JSON.stringify(item) };
+      if (item.type === 'pcn_offline_payment' || item.channel_id) {
+        endpoint = hostUrl + '/api/v1/channels/offline-sync';
+        body = {
+          type: 'pcn_offline_payment',
+          channel_id: item.channel_id,
+          sequence: item.sequence,
+          party_a: item.party_a,
+          party_b: item.party_b,
+          balance_a: item.balance_a,
+          balance_b: item.balance_b,
+          sender: item.sender,
+          signature: item.signature,
+          public_key: item.public_key
+        };
+      }
+      const res = await postData(endpoint, body);
+      if (res && (res.status === 'offline_pcn_synced' || res.status === 'offline_tx_validated' || res.status === 'relayed_over_bluetooth')) {
+        item.status = 'Synced to Host';
+        updated = true;
+      }
+    } catch (_) {}
+  }
+  if (updated) {
+    saveOfflineQueue(queue);
+    renderOfflineQueue();
+  }
+}
+window.addEventListener('online', () => {
+  autoSyncOfflineQueue();
+  refreshDashboardData();
+});
 
 function calcStakeYield() {
   const amt = parseFloat(document.getElementById('stakeAmount').value) || 0;
@@ -1852,13 +2420,15 @@ async function submitOpenChannel(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   try {
+    const user = getActiveWallet();
     const counterparty = document.getElementById('chanCounterparty').value.trim();
     const amount = parseInt(document.getElementById('chanAmount').value, 10);
     if (!counterparty) { showAlert('Counterparty address required', true); return; }
     if (isNaN(amount) || amount <= 0) { showAlert('Valid deposit amount required', true); return; }
 
-    const res = await postData('/api/v1/channels/open', { counterparty, amount }, btn);
+    const res = await postData('/api/v1/channels/open', { sender: user, counterparty, amount }, btn);
     showAlert('State channel opened: ' + res.id);
+    closeSheet('sheetChannel');
     refreshDashboardData();
   } catch (err) { showAlert(err.message, true); }
 }
@@ -1867,7 +2437,11 @@ async function submitUpdateChannel(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
   try {
-    const channel_id = document.getElementById('chanIdUpdate').value.trim();
+    let channel_id = (document.getElementById('chanIdUpdate').value || '').trim();
+    const customChan = document.getElementById('chanIdUpdateCustom');
+    if (customChan && customChan.style.display !== 'none' && customChan.value.trim()) {
+      channel_id = customChan.value.trim();
+    }
     const amount = parseInt(document.getElementById('chanUpdateAmt').value, 10);
     const sending = document.getElementById('chanDirection').value === 'true';
     if (!channel_id) { showAlert('Channel ID required', true); return; }
@@ -1881,7 +2455,11 @@ async function submitUpdateChannel(e) {
 
 async function submitSettleChannel(action) {
   try {
-    const channel_id = document.getElementById('chanIdSettle').value.trim();
+    let channel_id = (document.getElementById('chanIdSettle').value || '').trim();
+    const customChan = document.getElementById('chanIdSettleCustom');
+    if (customChan && customChan.style.display !== 'none' && customChan.value.trim()) {
+      channel_id = customChan.value.trim();
+    }
     if (!channel_id) { showAlert('Channel ID is required', true); return; }
     await postData('/api/v1/channels/settle', { channel_id, action });
     showAlert('Settlement ' + action + ' executed');
@@ -2026,11 +2604,40 @@ async function createNewWalletUI() {
 
   try {
     const res = await postData('/api/v1/wallet/create', {});
-    localStorage.setItem(getStorageKey('active_wallet'), res.address);
-    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([res.address]));
-    await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
+    const newAddr = res.address;
+    const initialLqd = res.balance || 1000;
+    const initialInr = res.inr_balance || 1000;
+
+    localStorage.setItem(getStorageKey('active_wallet'), newAddr);
+    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([newAddr]));
+
+    if (res.private_key && res.public_key) {
+      saveWalletKeys(newAddr, { privateKey: res.private_key, publicKey: res.public_key });
+      localStorage.setItem('liquidlink_client_privkey', res.private_key);
+      localStorage.setItem('liquidlink_client_pubkey', res.public_key);
+      localStorage.setItem('liquidlink_client_address', newAddr);
+    }
+
+    // Persist new wallet initial balance immediately in localStorage
+    saveWalletHoldings(newAddr, {
+      balance: initialLqd,
+      inr_balance: initialInr,
+      inr_reserved: 0,
+      staked_shares: 0,
+      bonds_held: 0
+    });
+
+    // Reset scoped storage for channels and bridge for this brand-new wallet
+    saveWalletChannels(newAddr, []);
+    saveWalletBridgeMappings(newAddr, []);
+    saveWalletOfflineQueue(newAddr, []);
+
+    // Instantly update DOM with scoped empty lists and new balance
+    await loadActiveWalletUI(newAddr, initialLqd, initialInr);
+    renderChannelsList([]);
+    renderBridgeList([]);
     refreshDashboardData();
-    celebrateWalletCreation(res.address, res.balance || 1000, res.inr_balance || 1000);
+    celebrateWalletCreation(newAddr, initialLqd, initialInr);
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -2138,11 +2745,37 @@ async function createNewWalletFromWelcome() {
   closeWelcomeOverlay();
   try {
     const res = await postData('/api/v1/wallet/create', {});
-    localStorage.setItem(getStorageKey('active_wallet'), res.address);
-    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([res.address]));
-    await loadActiveWalletUI(res.address, res.balance || 1000, res.inr_balance || 1000);
+    const newAddr = res.address;
+    const initialLqd = res.balance || 1000;
+    const initialInr = res.inr_balance || 1000;
+
+    localStorage.setItem(getStorageKey('active_wallet'), newAddr);
+    localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([newAddr]));
+
+    if (res.private_key && res.public_key) {
+      saveWalletKeys(newAddr, { privateKey: res.private_key, publicKey: res.public_key });
+      localStorage.setItem('liquidlink_client_privkey', res.private_key);
+      localStorage.setItem('liquidlink_client_pubkey', res.public_key);
+      localStorage.setItem('liquidlink_client_address', newAddr);
+    }
+
+    saveWalletHoldings(newAddr, {
+      balance: initialLqd,
+      inr_balance: initialInr,
+      inr_reserved: 0,
+      staked_shares: 0,
+      bonds_held: 0
+    });
+
+    saveWalletChannels(newAddr, []);
+    saveWalletBridgeMappings(newAddr, []);
+    saveWalletOfflineQueue(newAddr, []);
+
+    await loadActiveWalletUI(newAddr, initialLqd, initialInr);
+    renderChannelsList([]);
+    renderBridgeList([]);
     refreshDashboardData();
-    celebrateWalletCreation(res.address, res.balance || 1000, res.inr_balance || 1000);
+    celebrateWalletCreation(newAddr, initialLqd, initialInr);
   } catch (err) {
     showAlert('Failed to create wallet: ' + err.message, true);
   }
@@ -2323,17 +2956,30 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
   if (walletAddrEl) walletAddrEl.textContent = addr;
 
   const heroBalEl = document.getElementById('heroTotalBalance');
-  if (heroBalEl && initialBalance !== undefined) {
-    heroBalEl.innerHTML = initialBalance + '<small>LQD</small>';
-  }
-
   const inrBalEl = document.getElementById('heroINRBalance');
   const obInrEl = document.getElementById('obAvailableINR');
-  if (initialINRBalance !== undefined) {
-    const inrStr = (typeof initialINRBalance === 'number') ? initialINRBalance.toFixed(2) : initialINRBalance;
-    if (inrBalEl) inrBalEl.textContent = '₹' + inrStr + ' INR';
-    if (obInrEl) obInrEl.textContent = '₹' + inrStr + ' INR';
+
+  if (initialBalance !== undefined) {
+    saveWalletHoldings(addr, {
+      balance: initialBalance,
+      inr_balance: initialINRBalance
+    });
   }
+
+  // Load cached holdings immediately so offline mode or offline reload never shows node's balance!
+  const cached = getCachedWalletHoldings(addr);
+  const isNodeDefault = (addr === '{{ .Address }}');
+  const fallbackBal = isNodeDefault ? {{ .Balance }} : 1000;
+  const fallbackInr = isNodeDefault ? {{ .INRBalance }} : 1000;
+
+  const currentBal = (cached && cached.balance !== undefined) ? cached.balance : (initialBalance !== undefined ? initialBalance : fallbackBal);
+  const currentInr = (cached && cached.inr_balance !== undefined) ? cached.inr_balance : (initialINRBalance !== undefined ? initialINRBalance : fallbackInr);
+  const resVal = (cached && cached.inr_reserved !== undefined) ? cached.inr_reserved : 0;
+
+  if (heroBalEl) heroBalEl.innerHTML = currentBal + '<small>LQD</small>';
+  const displayINR = '₹' + Number(currentInr).toFixed(2) + ' INR' + (resVal > 0 ? ' (' + Number(resVal).toFixed(2) + ' Reserved)' : '');
+  if (inrBalEl) inrBalEl.textContent = displayINR;
+  if (obInrEl) obInrEl.textContent = displayINR;
 
   const topbarBtn = document.getElementById('topbarAvatarBtn');
   if (topbarBtn) topbarBtn.innerHTML = generateAvatarSVG(addr, 36);
@@ -2347,15 +2993,32 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
   try {
     const holdings = await fetchData('/api/v1/wallet/holdings?address=' + encodeURIComponent(addr));
     if (holdings) {
-      if (holdings.balance !== undefined && heroBalEl) {
-        heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
+      let effectiveBal = holdings.balance;
+      const q = getOfflineQueue();
+      if (Array.isArray(q) && q.length > 0 && effectiveBal !== undefined) {
+        const myAddr = addr.toLowerCase().trim();
+        q.forEach(item => {
+          if (item && item.status !== 'Synced to Host') {
+            const senderAddr = (item.sender || item.from || '').toLowerCase().trim();
+            const receiverAddr = (item.receiver || item.to || '').toLowerCase().trim();
+            const amt = Number(item.amount) || 0;
+            if (senderAddr === myAddr) {
+              effectiveBal -= amt;
+            } else if (receiverAddr === myAddr) {
+              effectiveBal += amt;
+            }
+          }
+        });
+      }
+      if (effectiveBal !== undefined && heroBalEl) {
+        heroBalEl.innerHTML = effectiveBal + '<small>LQD</small>';
       }
       if (holdings.inr_balance !== undefined) {
         const inrStr = (typeof holdings.inr_balance === 'number') ? holdings.inr_balance.toFixed(2) : holdings.inr_balance;
         const resVal = (typeof holdings.inr_reserved === 'number') ? holdings.inr_reserved : parseFloat(holdings.inr_reserved || 0);
-        const displayINR = '₹' + inrStr + ' INR' + (resVal > 0 ? ' (' + resVal.toFixed(2) + ' Reserved)' : '');
-        if (inrBalEl) inrBalEl.textContent = displayINR;
-        if (obInrEl) obInrEl.textContent = displayINR;
+        const liveDisplayINR = '₹' + inrStr + ' INR' + (resVal > 0 ? ' (' + resVal.toFixed(2) + ' Reserved)' : '');
+        if (inrBalEl) inrBalEl.textContent = liveDisplayINR;
+        if (obInrEl) obInrEl.textContent = liveDisplayINR;
       }
       const stEl = document.getElementById('userStakedShares');
       if (stEl && holdings.staked_shares !== undefined) {
@@ -2365,6 +3028,10 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
       if (bdEl && holdings.bonds_held !== undefined) {
         bdEl.textContent = holdings.bonds_held + ' Bonds';
       }
+      if (effectiveBal !== undefined) {
+        holdings.balance = effectiveBal;
+      }
+      saveWalletHoldings(addr, holdings);
     }
   } catch (err) {}
 
@@ -2394,6 +3061,8 @@ function renderWalletsListUI() {
 
 function switchActiveWallet(addr) {
   loadActiveWalletUI(addr);
+  renderChannelsList(getCachedWalletChannels(addr));
+  renderBridgeList(getCachedWalletBridgeMappings(addr));
   refreshDashboardData();
   showAlert('Switched active wallet to ' + addr.substring(0, 14) + '...');
 }
@@ -2500,77 +3169,150 @@ async function refreshOrderbookUI() {
   } catch (err) {}
 }
 
+function renderChannelsList(channels) {
+  const countEl = document.getElementById('channelsCount');
+  if (countEl) countEl.textContent = '(' + (channels ? channels.length : 0) + ')';
+
+  populateChannelDropdowns(channels || []);
+
+  const container = document.getElementById('channelsListContainer');
+  if (!container) return;
+
+  if (channels && channels.length > 0) {
+    let html = '';
+    channels.forEach(ch => {
+      const isOpened = ch.state === 'OPEN' || ch.state === 0;
+      const stateStr = isOpened ? 'OPEN' : ch.state;
+      const badgeClass = isOpened ? 'badge-active' : 'badge-pending';
+      const partyA = (ch.share && (ch.share.party_a || ch.share.PartyA)) || ch.party_a || '';
+      const partyB = (ch.share && (ch.share.party_b || ch.share.PartyB)) || ch.party_b || '';
+      const balA = (ch.share && ch.share.balance_party_a !== undefined) ? ch.share.balance_party_a : ((ch.share && ch.share.BalancePartyA !== undefined) ? ch.share.BalancePartyA : (ch.balance_a !== undefined ? ch.balance_a : 0));
+      const balB = (ch.share && ch.share.balance_party_b !== undefined) ? ch.share.balance_party_b : ((ch.share && ch.share.BalancePartyB !== undefined) ? ch.share.BalancePartyB : (ch.balance_b !== undefined ? ch.balance_b : 0));
+      const shortId = ch.id ? (ch.id.slice(0, 10) + '...' + ch.id.slice(-6)) : 'Channel';
+
+      html += '<div class="list-row" style="flex-wrap:wrap; padding:12px 14px; background:var(--surface); border:1px solid var(--border-soft); border-radius:12px; margin-bottom:10px;">' +
+        '<div class="row-main" style="min-width:180px;">' +
+          '<div class="row-title" style="display:flex; align-items:center; gap:8px;">' +
+            '<span style="font-family:var(--font-mono); font-weight:700;">' + shortId + '</span> ' +
+            '<span class="badge ' + badgeClass + '">' + stateStr + '</span>' +
+          '</div>' +
+          '<div class="row-sub" style="font-size:0.75rem; margin-top:4px;">' + (partyA.slice(0, 8) + '...') + ' → ' + (partyB.slice(0, 8) + '...') + '</div>' +
+        '</div>' +
+        '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:3px;">' +
+          '<div class="top" style="color:var(--text); font-weight:700;">' + balA + ' / ' + balB + ' LQD</div>' +
+          '<div class="bottom" style="font-size:0.72rem; color:var(--text-dim);">Sequence ' + (ch.sequence || 1) + '</div>' +
+          '<div style="display:flex; gap:4px; margin-top:4px;">' +
+            '<button type="button" class="btn btn-sm btn-ghost" onclick="openOfflinePaymentForChannel(\'' + ch.id + '\')" style="padding:3px 8px; font-size:0.72rem;">Pay Offline</button>' +
+            '<button type="button" class="btn btn-sm btn-secondary" onclick="openReceiveOfflineModal()" style="padding:3px 8px; font-size:0.72rem;">Receive Offline</button>' +
+          '</div>' +
+        '</div></div>';
+    });
+    container.innerHTML = html;
+    container.style.paddingBottom = '36px';
+  } else {
+    container.innerHTML = '<div class="empty-row">No active state channels yet. Tap "+ Open" to create one.</div>';
+  }
+}
+
+function renderBridgeList(mappings) {
+  const countEl = document.getElementById('bridgeCount');
+  if (countEl) countEl.textContent = '(' + (mappings ? mappings.length : 0) + ')';
+
+  const container = document.getElementById('bridgeListContainer');
+  if (!container) return;
+
+  if (mappings && mappings.length > 0) {
+    let html = '';
+    mappings.forEach(m => {
+      const isSettled = m.status === 'SETTLED' || m.status === 2 || m.status === 'settled';
+      const statusStr = isSettled ? 'SETTLED' : (m.status || 'PENDING');
+      const badgeClass = isSettled ? 'badge-settled' : 'badge-pending';
+      const txId = m.transaction_id || m.TransactionID || '';
+
+      const verifyBtn = !isSettled ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openVerifySheet(\'' + m.utr + '\');">Verify & Settle</button>' : '';
+      html += '<div class="list-row" onclick="openVerifySheet(\'' + m.utr + '\')" style="cursor:pointer;"><div class="row-main">' +
+        '<div class="row-title">' + m.utr + ' <span class="badge ' + badgeClass + '">' + statusStr + '</span></div>' +
+        '<div class="row-sub">Tx ' + txId + '</div></div>' +
+        '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">' + verifyBtn + '<div class="bottom">' + (m.created_at || '') + '</div></div></div>';
+    });
+    container.innerHTML = html;
+  } else {
+    container.innerHTML = '<div class="empty-row">No fiat bridge requests yet.</div>';
+  }
+}
+
 async function refreshChannelsUI() {
+  const activeWallet = getActiveWallet();
+  let channels = [];
   try {
-    const res = await fetchData('/api/v1/channels/list');
-    let channels = (res && res.channels) || [];
-    if (channels && channels.length > 0) {
-      localStorage.setItem(getStorageKey('pcn_channels'), JSON.stringify(channels));
-    } else {
-      const cached = localStorage.getItem(getStorageKey('pcn_channels'));
-      if (cached) {
-        try { channels = JSON.parse(cached); } catch (e) {}
-      }
-    }
-    const countEl = document.getElementById('channelsCount');
-    if (countEl) countEl.textContent = '(' + channels.length + ')';
+    const res = await fetchData('/api/v1/channels/list?address=' + encodeURIComponent(activeWallet));
+    let rawChannels = (res && res.channels) || [];
+    channels = rawChannels.filter(ch => {
+      if (!ch) return false;
+      const partyA = ((ch.share && (ch.share.party_a || ch.share.PartyA)) || ch.party_a || '').toLowerCase();
+      const partyB = ((ch.share && (ch.share.party_b || ch.share.PartyB)) || ch.party_b || '').toLowerCase();
+      const u = activeWallet.toLowerCase();
+      return partyA === u || partyB === u;
+    });
 
-    const container = document.getElementById('channelsListContainer');
-    if (container) {
-      if (channels.length > 0) {
-        let html = '';
-        channels.forEach(ch => {
-          const isOpened = ch.state === 'OPEN' || ch.state === 0;
-          const stateStr = isOpened ? 'OPEN' : ch.state;
-          const badgeClass = isOpened ? 'badge-active' : 'badge-pending';
-          const partyA = (ch.share && ch.share.party_a) || (ch.share && ch.share.PartyA) || '';
-          const partyB = (ch.share && ch.share.party_b) || (ch.share && ch.share.PartyB) || '';
-          const balA = (ch.share && ch.share.balance_party_a) !== undefined ? ch.share.balance_party_a : (ch.share && ch.share.BalancePartyA);
-          const balB = (ch.share && ch.share.balance_party_b) !== undefined ? ch.share.balance_party_b : (ch.share && ch.share.BalancePartyB);
-
-          html += '<div class="list-row"><div class="row-main">' +
-            '<div class="row-title">' + ch.id + ' <span class="badge ' + badgeClass + '">' + stateStr + '</span></div>' +
-            '<div class="row-sub">' + partyA + ' → ' + partyB + '</div></div>' +
-            '<div class="row-side"><div class="top">' + balA + ' / ' + balB + '</div>' +
-            '<div class="bottom">seq ' + ch.sequence + '</div></div></div>';
-        });
-        container.innerHTML = html;
-      } else {
-        container.innerHTML = '<div class="empty-row">No active state channels yet. Tap "+ Open" to create one.</div>';
-      }
+    // Merge with locally cached channels so offline updates with higher sequences are preserved
+    const cached = getCachedWalletChannels(activeWallet);
+    if (cached && cached.length > 0) {
+      cached.forEach(locCh => {
+        const srvIdx = channels.findIndex(c => c.id === locCh.id);
+        if (srvIdx >= 0) {
+          if ((locCh.sequence || 0) > (channels[srvIdx].sequence || 0)) {
+            channels[srvIdx] = locCh;
+          }
+        } else {
+          channels.push(locCh);
+        }
+      });
     }
-  } catch (err) {}
+
+    // Also overlay any pending offline PCN payments in the outbox queue
+    const queue = getOfflineQueue();
+    if (queue && queue.length > 0) {
+      queue.forEach(qItem => {
+        if ((qItem.type === 'pcn_offline_payment' || qItem.channel_id) && qItem.channel_id) {
+          const ch = channels.find(c => c.id === qItem.channel_id);
+          if (ch && (qItem.sequence || 0) >= (ch.sequence || 0)) {
+            ch.sequence = qItem.sequence;
+            if (ch.share) {
+              ch.share.balance_party_a = Number(qItem.balance_a);
+              ch.share.balance_party_b = Number(qItem.balance_b);
+            }
+            ch.balance_a = Number(qItem.balance_a);
+            ch.balance_b = Number(qItem.balance_b);
+          }
+        }
+      });
+    }
+
+    saveWalletChannels(activeWallet, channels);
+  } catch (err) {
+    channels = getCachedWalletChannels(activeWallet);
+  }
+  renderChannelsList(channels);
 }
 
 async function refreshBridgeUI() {
+  const activeWallet = getActiveWallet();
+  let mappings = [];
   try {
-    const res = await fetchData('/api/v1/bridge/list');
-    const mappings = res.mappings || [];
-    const countEl = document.getElementById('bridgeCount');
-    if (countEl) countEl.textContent = '(' + mappings.length + ')';
-
-    const container = document.getElementById('bridgeListContainer');
-    if (container) {
-      if (mappings.length > 0) {
-        let html = '';
-        mappings.forEach(m => {
-          const isSettled = m.status === 'SETTLED' || m.status === 2;
-          const statusStr = isSettled ? 'SETTLED' : m.status;
-          const badgeClass = isSettled ? 'badge-settled' : 'badge-pending';
-          const txId = m.transaction_id || m.TransactionID || '';
-
-          const verifyBtn = !isSettled ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openVerifySheet(\'' + m.utr + '\');">Verify & Settle</button>' : '';
-          html += '<div class="list-row" onclick="openVerifySheet(\'' + m.utr + '\')" style="cursor:pointer;"><div class="row-main">' +
-            '<div class="row-title">' + m.utr + ' <span class="badge ' + badgeClass + '">' + statusStr + '</span></div>' +
-            '<div class="row-sub">Tx ' + txId + '</div></div>' +
-            '<div class="row-side" style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">' + verifyBtn + '<div class="bottom">' + (m.created_at || '') + '</div></div></div>';
-        });
-        container.innerHTML = html;
-      } else {
-        container.innerHTML = '<div class="empty-row">No fiat bridge requests yet.</div>';
-      }
-    }
-  } catch (err) {}
+    const res = await fetchData('/api/v1/bridge/list?address=' + encodeURIComponent(activeWallet));
+    let rawMappings = (res && res.mappings) || [];
+    mappings = rawMappings.filter(m => {
+      if (!m) return false;
+      const mAddr = (m.address || m.Address || '').toLowerCase();
+      const u = activeWallet.toLowerCase();
+      return !mAddr || mAddr === u;
+    });
+    saveWalletBridgeMappings(activeWallet, mappings);
+  } catch (err) {
+    mappings = getCachedWalletBridgeMappings(activeWallet);
+  }
+  renderBridgeList(mappings);
 }
 
 async function refreshStabilityUI() {
@@ -2654,6 +3396,9 @@ async function refreshBlockchainUI() {
 }
 
 async function refreshDashboardData() {
+  if (navigator.onLine) {
+    autoSyncOfflineQueue();
+  }
   await Promise.allSettled([
     loadActiveWalletUI(),
     refreshOrderbookUI(),
@@ -2666,6 +3411,28 @@ async function refreshDashboardData() {
 }
 
 function initAvatars() {
+  const activeAddr = getActiveWallet();
+  if (activeAddr && activeAddr !== '{{ .Address }}') {
+    const cached = getCachedWalletHoldings(activeAddr);
+    const heroBalEl = document.getElementById('heroTotalBalance');
+    const inrBalEl = document.getElementById('heroINRBalance');
+    const obInrEl = document.getElementById('obAvailableINR');
+
+    const bal = (cached && cached.balance !== undefined) ? cached.balance : 1000;
+    const inr = (cached && cached.inr_balance !== undefined) ? cached.inr_balance : 1000;
+    const resInr = (cached && cached.inr_reserved !== undefined) ? cached.inr_reserved : 0;
+
+    if (heroBalEl) heroBalEl.innerHTML = bal + '<small>LQD</small>';
+    const displayINR = '₹' + Number(inr).toFixed(2) + ' INR' + (resInr > 0 ? ' (' + Number(resInr).toFixed(2) + ' Reserved)' : '');
+    if (inrBalEl) inrBalEl.textContent = displayINR;
+    if (obInrEl) obInrEl.textContent = displayINR;
+
+    const walletAddrEl = document.getElementById('walletAddress');
+    if (walletAddrEl) walletAddrEl.textContent = activeAddr;
+
+    renderChannelsList(getCachedWalletChannels(activeAddr));
+    renderBridgeList(getCachedWalletBridgeMappings(activeAddr));
+  }
   checkFirstTimeWelcome();
   resetHostUrl();
   renderOfflineQueue();
@@ -2674,6 +3441,455 @@ function initAvatars() {
 }
 
 document.addEventListener('DOMContentLoaded', initAvatars);
+
+/* ---------- Offline P2P Payment QR Generation & Camera Scanning ---------- */
+function renderOfflinePaymentQr(item) {
+  const card = document.getElementById('offlinePaymentQrCard');
+  const canvas = document.getElementById('offlinePaymentQrCanvas');
+  const details = document.getElementById('offlineQrDetails');
+  if (!card || !canvas) return;
+
+  canvas.innerHTML = '';
+  // Build clean minimal wire payload
+  const cleanItem = {
+    type: item.type,
+    channel_id: item.channel_id,
+    sequence: item.sequence,
+    party_a: item.party_a,
+    party_b: item.party_b,
+    balance_a: item.balance_a,
+    balance_b: item.balance_b,
+    amount: item.amount,
+    sender: item.sender,
+    receiver: item.receiver,
+    nonce: item.nonce,
+    signature: item.signature,
+    public_key: item.public_key
+  };
+  const payloadStr = JSON.stringify(cleanItem);
+
+  // Dynamic high-visibility responsive QR canvas size
+  const qrSize = Math.min(280, Math.max(220, window.innerWidth - 80));
+
+  new QRCode(canvas, {
+    text: payloadStr,
+    width: qrSize,
+    height: qrSize,
+    colorDark: "#000000",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.L
+  });
+
+  const isPcn = item.type === 'pcn_offline_payment' || !!item.channel_id;
+  if (details) {
+    details.textContent = isPcn
+      ? 'Channel Payment: ' + item.amount + ' LQD (Sequence ' + item.sequence + ')'
+      : 'Direct Transfer: ' + item.amount + ' LQD to ' + (item.receiver || '').slice(0, 10) + '...';
+  }
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function dismissOfflinePaymentQr() {
+  const card = document.getElementById('offlinePaymentQrCard');
+  if (card) card.style.display = 'none';
+}
+
+function renderOfflineAckQr(item) {
+  const card = document.getElementById('offlineAckQrCard');
+  const canvas = document.getElementById('offlineAckQrCanvas');
+  const details = document.getElementById('offlineAckQrDetails');
+  if (!card || !canvas) return;
+
+  canvas.innerHTML = '';
+  const activeUser = getActiveWallet();
+  const ackPayload = {
+    type: 'offline_payment_ack',
+    channel_id: item.channel_id || '',
+    sequence: item.sequence || 0,
+    sender: item.sender || '',
+    receiver: activeUser,
+    amount: item.amount,
+    nonce: item.nonce || Date.now(),
+    timestamp: Date.now()
+  };
+  const payloadStr = JSON.stringify(ackPayload);
+  const qrSize = Math.min(260, Math.max(200, window.innerWidth - 80));
+
+  if (window.QRCode) {
+    new QRCode(canvas, {
+      text: payloadStr,
+      width: qrSize,
+      height: qrSize,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.L
+    });
+  }
+  if (details) {
+    details.textContent = 'Received +' + item.amount + ' LQD from ' + (item.sender ? (item.sender.slice(0, 8) + '...') : 'Payer') + '. Show this receipt QR to sender.';
+  }
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function dismissOfflineAckQr() {
+  const card = document.getElementById('offlineAckQrCard');
+  if (card) card.style.display = 'none';
+}
+
+let offlineQrScanner = null;
+let isProcessingOfflineQr = false;
+
+async function startOfflinePaymentScan() {
+  const btnStart = document.getElementById('btnStartOfflineScan');
+  const btnStop = document.getElementById('btnStopOfflineScan');
+  const hint = document.getElementById('offlineScanHint');
+  if (!window.Html5Qrcode) {
+    showAlert('Camera scanner loading, please wait...', true);
+    return;
+  }
+
+  // Explicitly prompt for camera permission immediately on user interaction
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      stream.getTracks().forEach(t => t.stop());
+    } catch (pErr) {
+      console.warn('[Offline Camera] Permission request:', pErr);
+    }
+  }
+
+  if (offlineQrScanner) {
+    try { await offlineQrScanner.stop(); } catch(e) {}
+    try { offlineQrScanner.clear(); } catch(e) {}
+    offlineQrScanner = null;
+  }
+
+  if (hint) hint.innerHTML = 'Starting camera stream... Point at payer QR code.';
+
+  offlineQrScanner = new Html5Qrcode('offlineScannerRegion', {
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined
+  });
+
+  const qrConfig = {
+    fps: 10,
+    qrbox: function(w, h) {
+      const minEdge = Math.min(w, h);
+      const edge = Math.max(160, Math.floor(minEdge * 0.85));
+      return { width: edge, height: edge };
+    }
+  };
+
+  try {
+    await offlineQrScanner.start(
+      { facingMode: 'environment' },
+      qrConfig,
+      onOfflineQrScanSuccess,
+      () => {}
+    );
+    if (btnStart) btnStart.style.display = 'none';
+    if (btnStop) btnStop.style.display = 'block';
+    if (hint) hint.innerHTML = 'Point camera at payer QR code to verify.';
+  } catch (err) {
+    console.warn('[Offline Camera] facingMode failed, falling back to camera enumeration:', err);
+    try {
+      const cameras = await Html5Qrcode.getCameras();
+      if (cameras && cameras.length > 0) {
+        const backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear')) || cameras[0];
+        await offlineQrScanner.start(backCamera.id, qrConfig, onOfflineQrScanSuccess, () => {});
+        if (btnStart) btnStart.style.display = 'none';
+        if (btnStop) btnStop.style.display = 'block';
+        if (hint) hint.innerHTML = 'Point camera at payer QR code to verify.';
+        return;
+      }
+    } catch (camErr) {
+      console.warn('[Offline Camera] Camera list fallback failed:', camErr);
+    }
+    if (hint) hint.innerHTML = 'Live stream paused. Tap <b>"Snap Camera"</b> to capture photo directly!';
+    showAlert('Live camera paused. Tap "Snap Camera" to capture directly!', true);
+  }
+}
+
+async function stopOfflinePaymentScan() {
+  const btnStart = document.getElementById('btnStartOfflineScan');
+  const btnStop = document.getElementById('btnStopOfflineScan');
+  const hint = document.getElementById('offlineScanHint');
+  if (offlineQrScanner) {
+    try { await offlineQrScanner.stop(); } catch(e) {}
+    try { offlineQrScanner.clear(); } catch(e) {}
+    offlineQrScanner = null;
+  }
+  if (btnStart) btnStart.style.display = 'block';
+  if (btnStop) btnStop.style.display = 'none';
+  if (hint) hint.innerHTML = 'Scan the payer\'s offline payment QR code to verify Ed25519 signature and credit channel balance with zero internet.';
+}
+
+async function onOfflineQrScanSuccess(decodedText) {
+  if (isProcessingOfflineQr) return;
+  isProcessingOfflineQr = true;
+  if (navigator.vibrate) {
+    try { navigator.vibrate(120); } catch (_) {}
+  }
+  stopOfflinePaymentScan();
+  try {
+    let item;
+    if (typeof decodedText === 'object' && decodedText !== null) {
+      item = decodedText;
+    } else {
+      let raw = (decodedText || '').trim();
+      if (raw.startsWith('%7B')) raw = decodeURIComponent(raw);
+      item = JSON.parse(raw);
+    }
+    if (!item) {
+      showAlert('Invalid offline payment QR code', true);
+      return;
+    }
+
+    // Handle Offline Payment Receipt Acknowledgement
+    if (item.type === 'offline_payment_ack') {
+      const queue = getOfflineQueue();
+      let match = null;
+      for (const q of queue) {
+        if (item.channel_id && q.channel_id === item.channel_id && Number(q.sequence) === Number(item.sequence)) {
+          match = q;
+          break;
+        }
+        if (!item.channel_id && q.receiver && item.receiver && q.receiver.toLowerCase() === item.receiver.toLowerCase() && Number(q.amount) === Number(item.amount)) {
+          match = q;
+          break;
+        }
+      }
+      if (match) {
+        match.status = 'Confirmed by Receiver (Offline)';
+        match.confirmed_offline = true;
+        saveOfflineQueue(queue);
+        renderOfflineQueue();
+        showAlert('Payment confirmed by receiver offline! Transfer complete.');
+      } else {
+        showAlert('Received payment ACK receipt (' + item.amount + ' LQD)');
+      }
+      return;
+    }
+
+    if (!item.signature || !item.public_key) {
+      showAlert('Invalid offline payment QR code', true);
+      return;
+    }
+
+    // Verify cryptographic Ed25519 signature offline using sha256Sync
+    if (window.nacl) {
+      const pubBytes = hexToBytes(item.public_key);
+      const sigBytes = hexToBytes(item.signature);
+      let hashBytes;
+      if (item.type === 'pcn_offline_payment' || item.channel_id) {
+        const msg = item.channel_id + '|' + item.sequence + '|' + item.balance_a + '|' + item.balance_b;
+        hashBytes = sha256Sync(msg);
+      } else {
+        const msg = item.sender + '|' + item.receiver + '|' + item.amount + '|' + item.nonce;
+        hashBytes = sha256Sync(msg);
+      }
+
+      const verified = nacl.sign.detached.verify(hashBytes, sigBytes, pubBytes);
+      if (!verified) {
+        showAlert('Cryptographic signature verification failed on offline payment!', true);
+        return;
+      }
+    }
+
+    // Update local state channel balances if PCN
+    const activeUser = getActiveWallet();
+    if (item.channel_id) {
+      let channels = getCachedWalletChannels(activeUser);
+      let ch = channels.find(c => c.id === item.channel_id);
+      if (ch) {
+        ch.sequence = item.sequence;
+        if (ch.share) {
+          ch.share.balance_party_a = Number(item.balance_a);
+          ch.share.balance_party_b = Number(item.balance_b);
+        }
+      } else {
+        ch = {
+          id: item.channel_id,
+          party_a: item.party_a || item.sender,
+          party_b: item.party_b || activeUser,
+          state: 'OPEN',
+          sequence: item.sequence || 1,
+          share: {
+            balance_party_a: Number(item.balance_a),
+            balance_party_b: Number(item.balance_b)
+          }
+        };
+        channels.push(ch);
+      }
+      saveWalletChannels(activeUser, channels);
+      renderChannelsList(channels);
+    } else {
+      const currentHoldings = getCachedWalletHoldings(activeUser) || { balance: 1000, inr_balance: 1000 };
+      const amt = Number(item.amount) || 0;
+      currentHoldings.balance = (Number(currentHoldings.balance) || 0) + amt;
+      currentHoldings.inr_balance = (Number(currentHoldings.inr_balance) || 0) + amt;
+      saveWalletHoldings(activeUser, currentHoldings);
+      const heroBalEl = document.getElementById('heroTotalBalance');
+      if (heroBalEl) heroBalEl.innerHTML = currentHoldings.balance + '<small>LQD</small>';
+    }
+
+    // Add signed statement to receiver's outbox queue to push when reconnected
+    const queue = getOfflineQueue();
+    const exists = queue.some(q => q.signature === item.signature);
+    if (!exists) {
+      item.received_offline = true;
+      item.status = 'Pending Host Sync';
+      queue.push(item);
+      saveOfflineQueue(queue);
+    }
+
+    // Attempt automatic broadcast to host if network reachable
+    try {
+      const payloadStr = typeof decodedText === 'string' ? decodedText : JSON.stringify(item);
+      const bRes = await postData('/api/v1/transport/broadcast-offline', { payload: payloadStr });
+      if (bRes && (bRes.status === 'offline_pcn_synced' || bRes.status === 'offline_tx_validated')) {
+        item.status = 'Synced to Host';
+        saveOfflineQueue(queue);
+      }
+    } catch (_) {}
+
+    showAlert('Verified offline payment received! +' + item.amount + ' LQD' + (item.sequence ? ' (Seq ' + item.sequence + ')' : ''));
+    renderOfflineAckQr(item);
+    refreshDashboardData();
+  } catch (err) {
+    showAlert('Failed to process offline payment: ' + (err.message || 'Invalid format'), true);
+  } finally {
+    isProcessingOfflineQr = false;
+  }
+}
+
+async function handleOfflineQrImageUpload(input) {
+  if (!input.files || input.files.length === 0) return;
+  const file = input.files[0];
+  const hint = document.getElementById('offlineScanHint');
+  if (hint) hint.textContent = 'Decoding QR image...';
+
+  // Stop live scanner if currently running
+  if (offlineQrScanner) {
+    try { await offlineQrScanner.stop(); } catch (_) {}
+    try { offlineQrScanner.clear(); } catch (_) {}
+    offlineQrScanner = null;
+  }
+
+  if (!window.Html5Qrcode) {
+    showAlert('QR scanner loading, please wait...', true);
+    return;
+  }
+  const fileScanner = new Html5Qrcode('offlineScannerRegion', {
+    formatsToSupport: window.Html5QrcodeSupportedFormats ? [ window.Html5QrcodeSupportedFormats.QR_CODE ] : undefined
+  });
+  fileScanner.scanFile(file, false)
+    .then(text => {
+      fileScanner.clear();
+      input.value = '';
+      onOfflineQrScanSuccess(text);
+    })
+    .catch(() => {
+      fileScanner.clear();
+      input.value = '';
+      if (hint) hint.innerHTML = 'Could not detect a valid QR code in that photo. Please try again.';
+      showAlert('No valid offline payment QR code found in image', true);
+    });
+}
+
+
+/* ---------- Channel Dropdown & Navigation Helpers ---------- */
+function toggleCustomChannelInput() {
+  const custom = document.getElementById('bleChannelCustomID');
+  const btn = document.getElementById('btnToggleCustomChan');
+  if (!custom) return;
+  if (custom.style.display === 'none') {
+    custom.style.display = 'block';
+    custom.focus();
+    if (btn) btn.textContent = 'Use Dropdown';
+  } else {
+    custom.style.display = 'none';
+    if (btn) btn.textContent = '+ Custom ID';
+  }
+}
+
+function toggleCustomUpdateChan() {
+  const custom = document.getElementById('chanIdUpdateCustom');
+  const btn = document.getElementById('btnToggleCustomUpdate');
+  if (!custom) return;
+  if (custom.style.display === 'none') {
+    custom.style.display = 'block';
+    custom.focus();
+    if (btn) btn.textContent = 'Use Dropdown';
+  } else {
+    custom.style.display = 'none';
+    if (btn) btn.textContent = '+ Custom ID';
+  }
+}
+
+function toggleCustomSettleChan() {
+  const custom = document.getElementById('chanIdSettleCustom');
+  const btn = document.getElementById('btnToggleCustomSettle');
+  if (!custom) return;
+  if (custom.style.display === 'none') {
+    custom.style.display = 'block';
+    custom.focus();
+    if (btn) btn.textContent = 'Use Dropdown';
+  } else {
+    custom.style.display = 'none';
+    if (btn) btn.textContent = '+ Custom ID';
+  }
+}
+
+function openReceiveOfflineModal() {
+  openSheet('sheetBluetooth');
+  const tabs = document.querySelectorAll('#sheetBluetooth .sheet-tabs button');
+  if (tabs && tabs[1]) {
+    switchSubpanel('subBleReceive', tabs[1], 'sheetBluetooth');
+  }
+}
+
+function openOfflinePaymentForChannel(channelId) {
+  openSheet('sheetBluetooth');
+  switchSubpanel('subBlePayment', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[0], 'sheetBluetooth');
+  const sel = document.getElementById('bleChannelID');
+  if (sel) {
+    sel.value = channelId;
+  }
+}
+
+function populateChannelDropdowns(channels) {
+  const dropdownIds = ['bleChannelID', 'chanIdUpdate', 'chanIdSettle'];
+  dropdownIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const currentVal = el.value;
+    el.innerHTML = '<option value="">-- Select Active Channel --</option>';
+    if (channels && channels.length > 0) {
+      channels.forEach(ch => {
+        const opt = document.createElement('option');
+        opt.value = ch.id;
+        const balA = ch.share ? (ch.share.balance_party_a !== undefined ? ch.share.balance_party_a : ch.share.BalancePartyA) : 0;
+        const balB = ch.share ? (ch.share.balance_party_b !== undefined ? ch.share.balance_party_b : ch.share.BalancePartyB) : 0;
+        const shortId = ch.id.slice(0, 8) + '...' + ch.id.slice(-6);
+        opt.textContent = shortId + ' (Bal: ' + balA + ' / ' + balB + ' LQD - Seq ' + (ch.sequence || 1) + ')';
+        el.appendChild(opt);
+      });
+      if (currentVal && channels.some(c => c.id === currentVal)) {
+        el.value = currentVal;
+      } else if (channels.length > 0 && id === 'bleChannelID') {
+        el.value = channels[0].id;
+      }
+    } else {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No channels open yet - tap "+ Open"';
+      el.appendChild(opt);
+    }
+  });
+}
+
 </script>
 </body>
 </html>`

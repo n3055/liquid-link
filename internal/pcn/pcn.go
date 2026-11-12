@@ -63,8 +63,8 @@ type OfflineStateStatement struct {
 
 // Manager handles the lifecycle of payment channels.
 type Manager interface {
-	// OpenChannel locks collateral and establishes a payment channel.
-	OpenChannel(ctx context.Context, counterpart crypto.Address, initialDeposit token.Amount) (*Channel, error)
+	// OpenChannel locks collateral and establishes a payment channel. If sender is provided, it is used as Party A; otherwise the node address is used.
+	OpenChannel(ctx context.Context, counterpart crypto.Address, initialDeposit token.Amount, sender ...crypto.Address) (*Channel, error)
 
 	// UpdateChannelState updates the balances of the channel, requiring mutual signatures.
 	UpdateChannelState(ctx context.Context, channelID string, amount token.Amount, sending bool) (*Channel, error)
