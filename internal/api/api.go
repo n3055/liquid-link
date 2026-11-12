@@ -1470,11 +1470,19 @@ func (s *Server) handleWalletCreate(w http.ResponseWriter, r *http.Request) {
 	fiatM := s.getFiatManager()
 	_ = fiatM.CreditINR(ctx, addr, 1000.00)
 
+	var privHex string
+	if lw, ok := newW.(interface{ ExportPrivateKey() []byte }); ok {
+		privHex = hex.EncodeToString(lw.ExportPrivateKey())
+	}
+	pubHex := hex.EncodeToString(newW.ExportPublicKey())
+
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
 		"status":      "created",
 		"address":     string(addr),
 		"balance":     1000,
 		"inr_balance": 1000.00,
+		"private_key": privHex,
+		"public_key":  pubHex,
 	})
 }
 

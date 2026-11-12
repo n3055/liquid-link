@@ -1193,6 +1193,14 @@ input:focus, select:focus { border-color: var(--accent); outline: none; box-shad
         <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('offlineQrFileInput').click()" style="width:100%;">Upload QR Image File</button>
         <input type="file" id="offlineQrFileInput" accept="image/*" style="display:none;" onchange="handleOfflineQrImageUpload(this)">
       </div>
+
+      <!-- Offline Payment Receipt Acknowledgement Card -->
+      <div id="offlineAckQrCard" style="display:none; margin-top:16px; padding:16px; background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.3); border-radius:12px; text-align:center;">
+        <div style="font-size:0.95rem; font-weight:700; color:#22c55e; margin-bottom:4px;">Receipt Acknowledged (Offline)</div>
+        <p id="offlineAckQrDetails" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px;">Payment verified offline. Present this receipt to the sender to confirm their transfer.</p>
+        <div id="offlineAckQrCanvas" style="display:flex; justify-content:center; padding:10px; background:#fff; border-radius:8px; width:fit-content; margin:0 auto 12px;"></div>
+        <button type="button" class="btn btn-sm btn-ghost" onclick="dismissOfflineAckQr()">Dismiss Receipt</button>
+      </div>
     </div>
   </div>
 
@@ -1347,7 +1355,42 @@ async function deriveAddressFromPub(pubBytes) {
   return '0x' + bytesToHex(hashBytes.slice(0, 20));
 }
 
-async function getOrCreateClientKeypair() {
+function getWalletKeyStorageKey(address, type) {
+  const norm = (address || '').toLowerCase().trim();
+  return 'liquidlink_wallet_key_' + norm + '_' + type;
+}
+
+function saveWalletKeys(address, keys) {
+  if (!address || !keys) return;
+  const norm = address.toLowerCase().trim();
+  if (keys.privateKey) localStorage.setItem(getWalletKeyStorageKey(norm, 'privkey'), keys.privateKey);
+  if (keys.publicKey) localStorage.setItem(getWalletKeyStorageKey(norm, 'pubkey'), keys.publicKey);
+}
+
+function getWalletKeys(address) {
+  if (!address) return null;
+  const norm = address.toLowerCase().trim();
+  const priv = localStorage.getItem(getWalletKeyStorageKey(norm, 'privkey'));
+  const pub = localStorage.getItem(getWalletKeyStorageKey(norm, 'pubkey'));
+  if (priv && pub) return { privateKey: priv, publicKey: pub };
+  return null;
+}
+
+async function getOrCreateClientKeypair(targetAddr) {
+  const addrToUse = (targetAddr || localStorage.getItem(getStorageKey('active_wallet')) || localStorage.getItem('liquidlink_active_wallet') || '').toLowerCase().trim();
+  if (addrToUse) {
+    const scoped = getWalletKeys(addrToUse);
+    if (scoped && scoped.privateKey && scoped.publicKey) {
+      const pubBytes = hexToBytes(scoped.publicKey);
+      const derived = await deriveAddressFromPub(pubBytes);
+      return {
+        secretKey: hexToBytes(scoped.privateKey),
+        publicKey: pubBytes,
+        address: derived
+      };
+    }
+  }
+
   let privHex = localStorage.getItem('liquidlink_client_privkey');
   let pubHex = localStorage.getItem('liquidlink_client_pubkey');
   if (privHex && pubHex) {
@@ -1367,6 +1410,9 @@ async function getOrCreateClientKeypair() {
     localStorage.setItem('liquidlink_client_pubkey', pubHex);
     const addr = await deriveAddressFromPub(kp.publicKey);
     localStorage.setItem('liquidlink_client_address', addr);
+    if (addrToUse) {
+      saveWalletKeys(addrToUse, { privateKey: privHex, publicKey: pubHex });
+    }
     return { secretKey: kp.secretKey, publicKey: kp.publicKey, address: addr };
   }
   return null;
@@ -1629,14 +1675,14 @@ async function openScanner(fillFieldId, thenOpenSheet) {
 }
 
 function onQrScanSuccess(decodedText) {
-  // Check if scanned QR is an offline payment payload
+  // Check if scanned QR is an offline payment payload or ACK receipt
   if (decodedText) {
     try {
       let raw = typeof decodedText === 'string' ? decodedText.trim() : '';
       if (raw.startsWith('%7B')) raw = decodeURIComponent(raw);
       if ((raw.startsWith('{') && raw.endsWith('}')) || typeof decodedText === 'object') {
         const parsed = typeof decodedText === 'object' ? decodedText : JSON.parse(raw);
-        if (parsed && parsed.signature && (parsed.channel_id || parsed.type === 'pcn_offline_payment' || parsed.type === 'direct_tx_offline' || parsed.type === 'direct_transfer' || parsed.receiver)) {
+        if (parsed && (parsed.type === 'offline_payment_ack' || (parsed.signature && (parsed.channel_id || parsed.type === 'pcn_offline_payment' || parsed.type === 'direct_tx_offline' || parsed.type === 'direct_transfer' || parsed.receiver)))) {
           closeSheetAndStopScan();
           onOfflineQrScanSuccess(parsed);
           return;
@@ -1873,10 +1919,21 @@ function renderOfflineQueue() {
     const isPcn = item.type === 'pcn_offline_payment' || !!item.channel_id;
     const targetLabel = isPcn ? 'Channel: ' + (item.channel_id || '').slice(0, 12) + '...' : 'To: ' + (item.receiver || '').slice(0, 12) + '...';
     const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '';
+    let badgeClass = 'badge badge-pending';
+    let badgeStyle = 'font-size:0.6rem;';
+    let statusText = item.status || 'Pending Sync';
+    if (statusText === 'Confirmed by Receiver (Offline)' || item.confirmed_offline) {
+      badgeClass = 'badge badge-settled';
+      badgeStyle = 'font-size:0.6rem; background:rgba(34,197,94,0.18); color:#22c55e; border-color:rgba(34,197,94,0.3);';
+      statusText = 'Confirmed (Offline)';
+    } else if (statusText === 'Synced to Host') {
+      badgeClass = 'badge badge-settled';
+      statusText = 'Synced';
+    }
     html += '<div class="list-row" style="padding:10px 12px; background:var(--surface-2); border-radius:8px; margin-bottom:4px;">' +
       '<div class="row-main">' +
         '<div class="row-title" style="font-size:0.8rem;">' + (isPcn ? 'PCN Off-Chain' : 'Direct Transfer') +
-          ' <span class="badge badge-pending" style="font-size:0.6rem;">' + (item.status || 'Pending Sync') + '</span></div>' +
+          ' <span class="' + badgeClass + '" style="' + badgeStyle + '">' + statusText + '</span></div>' +
         '<div class="row-sub" style="font-size:0.74rem;">' + targetLabel + (item.sequence ? ' (Seq ' + item.sequence + ')' : '') + ' • ' + timeStr + '</div>' +
       '</div>' +
       '<div class="row-side">' +
@@ -2076,7 +2133,7 @@ async function submitOfflinePaymentForm(e) {
   // 1. Attempt client-side offline signature via TweetNaCl if available
   if (window.nacl) {
     try {
-      const clientKp = await getOrCreateClientKeypair();
+      const clientKp = await getOrCreateClientKeypair(user);
       if (clientKp) {
         let hashBytes;
         if (payType === 'pcn') {
@@ -2254,6 +2311,56 @@ async function pushOfflineQueueToHost() {
     showAlert('Validation failed with Host (' + hostUrl + '): ' + (lastError || 'Ensure Host is reachable'), true);
   }
 }
+
+async function autoSyncOfflineQueue() {
+  const queue = getOfflineQueue();
+  if (!queue || queue.length === 0) return;
+  const unsynced = queue.filter(item => item.status !== 'Synced to Host');
+  if (unsynced.length === 0) return;
+
+  const hostUrlInput = document.getElementById('bleHostUrl');
+  let hostUrl = (hostUrlInput && hostUrlInput.value.trim()) || window.location.origin;
+  if (!/^https?:\/\//i.test(hostUrl)) {
+    hostUrl = 'http://' + hostUrl;
+  }
+  hostUrl = hostUrl.replace(/\/+$/, '');
+
+  let updated = false;
+  for (const item of unsynced) {
+    try {
+      let endpoint = hostUrl + '/api/v1/transport/broadcast-offline';
+      let body = { payload: JSON.stringify(item) };
+      if (item.type === 'pcn_offline_payment' || item.channel_id) {
+        endpoint = hostUrl + '/api/v1/channels/offline-sync';
+        body = {
+          type: 'pcn_offline_payment',
+          channel_id: item.channel_id,
+          sequence: item.sequence,
+          party_a: item.party_a,
+          party_b: item.party_b,
+          balance_a: item.balance_a,
+          balance_b: item.balance_b,
+          sender: item.sender,
+          signature: item.signature,
+          public_key: item.public_key
+        };
+      }
+      const res = await postData(endpoint, body);
+      if (res && (res.status === 'offline_pcn_synced' || res.status === 'offline_tx_validated' || res.status === 'relayed_over_bluetooth')) {
+        item.status = 'Synced to Host';
+        updated = true;
+      }
+    } catch (_) {}
+  }
+  if (updated) {
+    saveOfflineQueue(queue);
+    renderOfflineQueue();
+  }
+}
+window.addEventListener('online', () => {
+  autoSyncOfflineQueue();
+  refreshDashboardData();
+});
 
 function calcStakeYield() {
   const amt = parseFloat(document.getElementById('stakeAmount').value) || 0;
@@ -2504,6 +2611,13 @@ async function createNewWalletUI() {
     localStorage.setItem(getStorageKey('active_wallet'), newAddr);
     localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([newAddr]));
 
+    if (res.private_key && res.public_key) {
+      saveWalletKeys(newAddr, { privateKey: res.private_key, publicKey: res.public_key });
+      localStorage.setItem('liquidlink_client_privkey', res.private_key);
+      localStorage.setItem('liquidlink_client_pubkey', res.public_key);
+      localStorage.setItem('liquidlink_client_address', newAddr);
+    }
+
     // Persist new wallet initial balance immediately in localStorage
     saveWalletHoldings(newAddr, {
       balance: initialLqd,
@@ -2637,6 +2751,13 @@ async function createNewWalletFromWelcome() {
 
     localStorage.setItem(getStorageKey('active_wallet'), newAddr);
     localStorage.setItem(getStorageKey('known_wallets'), JSON.stringify([newAddr]));
+
+    if (res.private_key && res.public_key) {
+      saveWalletKeys(newAddr, { privateKey: res.private_key, publicKey: res.public_key });
+      localStorage.setItem('liquidlink_client_privkey', res.private_key);
+      localStorage.setItem('liquidlink_client_pubkey', res.public_key);
+      localStorage.setItem('liquidlink_client_address', newAddr);
+    }
 
     saveWalletHoldings(newAddr, {
       balance: initialLqd,
@@ -2872,8 +2993,25 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
   try {
     const holdings = await fetchData('/api/v1/wallet/holdings?address=' + encodeURIComponent(addr));
     if (holdings) {
-      if (holdings.balance !== undefined && heroBalEl) {
-        heroBalEl.innerHTML = holdings.balance + '<small>LQD</small>';
+      let effectiveBal = holdings.balance;
+      const q = getOfflineQueue();
+      if (Array.isArray(q) && q.length > 0 && effectiveBal !== undefined) {
+        const myAddr = addr.toLowerCase().trim();
+        q.forEach(item => {
+          if (item && item.status !== 'Synced to Host') {
+            const senderAddr = (item.sender || item.from || '').toLowerCase().trim();
+            const receiverAddr = (item.receiver || item.to || '').toLowerCase().trim();
+            const amt = Number(item.amount) || 0;
+            if (senderAddr === myAddr) {
+              effectiveBal -= amt;
+            } else if (receiverAddr === myAddr) {
+              effectiveBal += amt;
+            }
+          }
+        });
+      }
+      if (effectiveBal !== undefined && heroBalEl) {
+        heroBalEl.innerHTML = effectiveBal + '<small>LQD</small>';
       }
       if (holdings.inr_balance !== undefined) {
         const inrStr = (typeof holdings.inr_balance === 'number') ? holdings.inr_balance.toFixed(2) : holdings.inr_balance;
@@ -2889,6 +3027,9 @@ async function loadActiveWalletUI(targetAddr, initialBalance, initialINRBalance)
       const bdEl = document.getElementById('userBondsHeld');
       if (bdEl && holdings.bonds_held !== undefined) {
         bdEl.textContent = holdings.bonds_held + ' Bonds';
+      }
+      if (effectiveBal !== undefined) {
+        holdings.balance = effectiveBal;
       }
       saveWalletHoldings(addr, holdings);
     }
@@ -3255,6 +3396,9 @@ async function refreshBlockchainUI() {
 }
 
 async function refreshDashboardData() {
+  if (navigator.onLine) {
+    autoSyncOfflineQueue();
+  }
   await Promise.allSettled([
     loadActiveWalletUI(),
     refreshOrderbookUI(),
@@ -3348,6 +3492,49 @@ function renderOfflinePaymentQr(item) {
 
 function dismissOfflinePaymentQr() {
   const card = document.getElementById('offlinePaymentQrCard');
+  if (card) card.style.display = 'none';
+}
+
+function renderOfflineAckQr(item) {
+  const card = document.getElementById('offlineAckQrCard');
+  const canvas = document.getElementById('offlineAckQrCanvas');
+  const details = document.getElementById('offlineAckQrDetails');
+  if (!card || !canvas) return;
+
+  canvas.innerHTML = '';
+  const activeUser = getActiveWallet();
+  const ackPayload = {
+    type: 'offline_payment_ack',
+    channel_id: item.channel_id || '',
+    sequence: item.sequence || 0,
+    sender: item.sender || '',
+    receiver: activeUser,
+    amount: item.amount,
+    nonce: item.nonce || Date.now(),
+    timestamp: Date.now()
+  };
+  const payloadStr = JSON.stringify(ackPayload);
+  const qrSize = Math.min(260, Math.max(200, window.innerWidth - 80));
+
+  if (window.QRCode) {
+    new QRCode(canvas, {
+      text: payloadStr,
+      width: qrSize,
+      height: qrSize,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.L
+    });
+  }
+  if (details) {
+    details.textContent = 'Received +' + item.amount + ' LQD from ' + (item.sender ? (item.sender.slice(0, 8) + '...') : 'Payer') + '. Show this receipt QR to sender.';
+  }
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function dismissOfflineAckQr() {
+  const card = document.getElementById('offlineAckQrCard');
   if (card) card.style.display = 'none';
 }
 
@@ -3454,7 +3641,38 @@ async function onOfflineQrScanSuccess(decodedText) {
       if (raw.startsWith('%7B')) raw = decodeURIComponent(raw);
       item = JSON.parse(raw);
     }
-    if (!item || !item.signature || !item.public_key) {
+    if (!item) {
+      showAlert('Invalid offline payment QR code', true);
+      return;
+    }
+
+    // Handle Offline Payment Receipt Acknowledgement
+    if (item.type === 'offline_payment_ack') {
+      const queue = getOfflineQueue();
+      let match = null;
+      for (const q of queue) {
+        if (item.channel_id && q.channel_id === item.channel_id && Number(q.sequence) === Number(item.sequence)) {
+          match = q;
+          break;
+        }
+        if (!item.channel_id && q.receiver && item.receiver && q.receiver.toLowerCase() === item.receiver.toLowerCase() && Number(q.amount) === Number(item.amount)) {
+          match = q;
+          break;
+        }
+      }
+      if (match) {
+        match.status = 'Confirmed by Receiver (Offline)';
+        match.confirmed_offline = true;
+        saveOfflineQueue(queue);
+        renderOfflineQueue();
+        showAlert('Payment confirmed by receiver offline! Transfer complete.');
+      } else {
+        showAlert('Received payment ACK receipt (' + item.amount + ' LQD)');
+      }
+      return;
+    }
+
+    if (!item.signature || !item.public_key) {
       showAlert('Invalid offline payment QR code', true);
       return;
     }
@@ -3537,11 +3755,8 @@ async function onOfflineQrScanSuccess(decodedText) {
     } catch (_) {}
 
     showAlert('Verified offline payment received! +' + item.amount + ' LQD' + (item.sequence ? ' (Seq ' + item.sequence + ')' : ''));
+    renderOfflineAckQr(item);
     refreshDashboardData();
-    const sheetBt = document.getElementById('sheetBluetooth');
-    if (sheetBt && sheetBt.classList.contains('open')) {
-      switchSubpanel('subBleQueue', document.querySelectorAll('#sheetBluetooth .sheet-tabs button')[3], 'sheetBluetooth');
-    }
   } catch (err) {
     showAlert('Failed to process offline payment: ' + (err.message || 'Invalid format'), true);
   } finally {
